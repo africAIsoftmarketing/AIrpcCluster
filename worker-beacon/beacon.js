@@ -200,39 +200,36 @@ function startBeacon() {
   const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
   let intervalId = null;
   
-  // Store socket reference for cleanup
-  const cleanup = () => {
-    console.log('[beacon] Cleaning up...');
+  // Handle graceful shutdown
+  const shutdown = (signal) => {
+    console.log(`[beacon] Received ${signal}, shutting down...`);
     if (intervalId) {
       clearInterval(intervalId);
       intervalId = null;
     }
-    try {
-      socket.close();
-    } catch (e) {
-      // Ignore close errors
-    }
+    socket.close(() => {
+      console.log('[beacon] Socket closed, exiting.');
+      process.exit(0);
+    });
   };
   
-  // Handle graceful shutdown
-  process.on('SIGTERM', () => {
-    console.log('[beacon] Received SIGTERM, shutting down...');
-    cleanup();
-    process.exit(0);
-  });
-
-  process.on('SIGINT', () => {
-    console.log('[beacon] Received SIGINT, shutting down...');
-    cleanup();
-    process.exit(0);
-  });
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
   
   socket.on('error', (err) => {
     console.error('[beacon] Socket error:', err.message);
     // Attempt to recover
     setTimeout(() => {
       console.log('[beacon] Attempting to restart beacon...');
-      cleanup();
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      try {
+        socket.close();
+      } catch (e) {
+        // Ignore close errors
+      }
       startBeacon();
     }, 5000);
   });

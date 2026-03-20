@@ -39,7 +39,7 @@ system have been validated and pass all checks.
 
 - [x] Exports `generate(ctl: GeneratorController, history: Chat): Promise<void>`
 - [x] Uses correct LM Studio interface types
-- [x] Race condition guard added (`isServerStarting` flag)
+- [x] Race condition guard uses shared Promise (`serverReadyPromise`)
 - [x] ENOENT error handling for missing `llama-server`
 
 ### src/config.ts ✅
@@ -172,10 +172,11 @@ cd rpc-cluster-plugin && npm test
 
 ### Manual Layer 2 Verification (requires llama-server)
 
-1. Create config file at platform path:
+#### Layer 2 — Local inference without workers
 
 ```bash
-# macOS
+# 1. Write a minimal config.json to the correct platform path
+#    macOS:
 mkdir -p ~/Library/Application\ Support/rpc-cluster
 cat > ~/Library/Application\ Support/rpc-cluster/config.json << 'EOF'
 {
@@ -187,38 +188,97 @@ cat > ~/Library/Application\ Support/rpc-cluster/config.json << 'EOF'
   "workers": []
 }
 EOF
+
+#    Windows (PowerShell):
+# mkdir -p $env:APPDATA\rpc-cluster
+# Set-Content -Path "$env:APPDATA\rpc-cluster\config.json" -Value @'
+# {
+#   "modelPath": "C:\\path\\to\\your\\model.gguf",
+#   "nGpuLayers": 0,
+#   "maxTokens": 128,
+#   "temperature": 0.7,
+#   "discoveryTimeoutMs": 1000,
+#   "workers": []
+# }
+# '@
+
+# 2. Build and start the plugin
+cd rpc-cluster-plugin && npm run build && lms dev
+
+# 3. Open LM Studio → model picker → select "RPC Cluster"
+# 4. Send any message
+# Expected: plugin status shows "No workers found - using local inference only"
+#           llama-server spawns, tokens stream into LM Studio chat
 ```
-
-2. Ensure `llama-server` is in PATH:
-
-```bash
-which llama-server
-```
-
-3. Run the plugin in development mode:
-
-```bash
-cd rpc-cluster-plugin
-npm run dev
-```
-
-4. In LM Studio, select "RPC Cluster" and send a message.
 
 ### Manual Layer 3 Verification (requires two machines)
 
-1. On Worker machine, install and run beacon:
+#### Layer 3 — Distributed inference with a real worker
 
 ```bash
+# === On the WORKER laptop ===
+
+# Option A: Run the beacon manually (for testing)
 cd worker-beacon
 node beacon.js
 # Should output: Broadcasting to 255.255.255.255:5005 every 3000ms
+
+# Option B: Run the rpc-server manually (replace with actual binary path)
+./rpc-server -H 0.0.0.0 -p 50052 -m 0
+# Or if installed via the installer, the service is already running
+
+# Verify the worker is broadcasting:
+# The beacon should log its IP address on startup
+
+# === On the HOST laptop ===
+
+# Option 1: Let the plugin auto-discover workers
+# Just run: lms dev
+# The plugin will discover workers via UDP broadcast within discoveryTimeoutMs
+
+# Option 2: Manually add workers to config.json (for static configuration)
+cat > ~/Library/Application\ Support/rpc-cluster/config.json << 'EOF'
+{
+  "modelPath": "/path/to/your/model.gguf",
+  "nGpuLayers": 99,
+  "maxTokens": 2048,
+  "temperature": 0.7,
+  "discoveryTimeoutMs": 4000,
+  "workers": [
+    {
+      "hostname": "Worker-Laptop",
+      "ip": "192.168.1.100",
+      "port": 50052,
+      "vramGB": 8,
+      "enabled": true
+    }
+  ]
+}
+EOF
+
+# Start the plugin
+cd rpc-cluster-plugin && npm run build && lms dev
+
+# Expected behavior:
+# 1. discoverWorkers() returns the worker within 4 seconds
+# 2. llama-server spawns with --rpc 192.168.1.100:50052
+# 3. On first run, tensor weights transfer to worker (5-10 min on Wi-Fi for 70B)
+# 4. Subsequent runs use cached weights and start fast
+# 5. Tokens stream into LM Studio chat
+
+# Verify worker is being used:
+# Check the plugin status message shows "Starting llama-server with 1 RPC worker(s)"
+# Check worker logs show incoming connections
 ```
 
-2. On Host machine, verify discovery via plugin logs or network sniffer:
+#### Verifying network discovery
 
 ```bash
-# Using tcpdump to verify beacon packets
+# On the HOST, verify beacon packets are arriving:
 sudo tcpdump -i any udp port 5005 -A
+
+# You should see JSON payloads like:
+# {"hostname":"Worker-Laptop","ip":"192.168.1.100","port":50052,"vramGB":8,"platform":"darwin"}
 ```
 
 ---
@@ -229,13 +289,13 @@ sudo tcpdump -i any udp port 5005 -A
 
 2. **config.ts**: Added `CONFIG_PATH` export for external consumers.
 
-3. **generator.ts**: Added `isServerStarting` flag to guard against race conditions when `generate()` is called twice rapidly before llama-server is ready.
+3. **generator.ts**: Changed from boolean `isServerStarting` flag to Promise-based `serverReadyPromise` guard to properly handle concurrent calls waiting for the same server startup.
 
 4. **generator.ts**: Added ENOENT error handling in spawn try/catch block to provide human-readable error message when llama-server is not found.
 
 5. **generator.ts**: Added `ctl.statusUpdate()` call before throwing llama-server not found error for better UX.
 
-6. **beacon.js**: Moved SIGTERM/SIGINT handlers inside `startBeacon()` to properly close socket and clear interval before exit.
+6. **beacon.js**: Fixed SIGTERM/SIGINT handlers to call `process.exit(0)` inside the `socket.close()` callback, ensuring the socket is fully closed before exit.
 
 ---
 

@@ -29,7 +29,7 @@ const LLAMA_SERVER_STARTUP_TIMEOUT = 30000;
  */
 let llamaServerProcess: ChildProcess | null = null;
 let currentRpcConfig: string | null = null;
-let isServerStarting = false;
+let serverReadyPromise: Promise<void> | null = null;
 
 /**
  * Cleanup handler for process exit
@@ -52,41 +52,14 @@ setupCleanupHandler();
 
 /**
  * Spawns llama-server with the given configuration
+ * Returns a Promise that resolves when server is ready
  */
-async function spawnLlamaServer(
+async function doSpawnLlamaServer(
   config: Config,
   workers: Worker[],
   ctl: GeneratorController
 ): Promise<void> {
   const rpcArg = workers.length > 0 ? buildRpcArgument(workers) : '';
-  
-  // Check if we already have a server running with the same config
-  if (llamaServerProcess && currentRpcConfig === rpcArg) {
-    const inUse = await isPortInUse(LLAMA_SERVER_PORT);
-    if (inUse) {
-      ctl.statusUpdate('Reusing existing llama-server instance');
-      return;
-    }
-    // Process died, need to restart
-    llamaServerProcess = null;
-    currentRpcConfig = null;
-  }
-  
-  // Guard against race conditions when generate() is called rapidly
-  if (isServerStarting) {
-    ctl.statusUpdate('Waiting for server to start...');
-    // Wait for the existing startup to complete
-    await waitForPort(LLAMA_SERVER_PORT, LLAMA_SERVER_STARTUP_TIMEOUT);
-    return;
-  }
-  
-  // Kill existing process if config changed
-  if (llamaServerProcess) {
-    ctl.statusUpdate('Worker configuration changed, restarting llama-server...');
-    llamaServerProcess.kill('SIGTERM');
-    llamaServerProcess = null;
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
   
   // Check if llama-server is in PATH
   const hasLlamaServer = await commandExists('llama-server');
@@ -113,8 +86,6 @@ async function spawnLlamaServer(
     ctl.statusUpdate('Starting llama-server in local mode (no workers found)...');
   }
   
-  isServerStarting = true;
-  
   // Spawn the process
   try {
     llamaServerProcess = spawn('llama-server', args, {
@@ -122,7 +93,6 @@ async function spawnLlamaServer(
       detached: false
     });
   } catch (err) {
-    isServerStarting = false;
     const error = err as NodeJS.ErrnoException;
     if (error.code === 'ENOENT') {
       const errorMsg = 'llama-server not found. Please ensure llama-server is installed and in your PATH.';
@@ -151,32 +121,84 @@ async function spawnLlamaServer(
     }
     llamaServerProcess = null;
     currentRpcConfig = null;
-    isServerStarting = false;
+    serverReadyPromise = null;
   });
   
   llamaServerProcess.on('exit', (code, signal) => {
     console.log(`[generator] llama-server exited with code ${code}, signal ${signal}`);
     llamaServerProcess = null;
     currentRpcConfig = null;
-    isServerStarting = false;
+    serverReadyPromise = null;
   });
   
   // Wait for the server to be ready
   ctl.statusUpdate('Waiting for llama-server to initialize...');
   try {
     await waitForPort(LLAMA_SERVER_PORT, LLAMA_SERVER_STARTUP_TIMEOUT);
-    isServerStarting = false;
     ctl.statusUpdate('llama-server ready');
   } catch (err) {
-    isServerStarting = false;
     if (llamaServerProcess) {
       llamaServerProcess.kill('SIGTERM');
       llamaServerProcess = null;
     }
+    currentRpcConfig = null;
+    serverReadyPromise = null;
     throw new Error(
       `llama-server failed to start within ${LLAMA_SERVER_STARTUP_TIMEOUT / 1000} seconds. ` +
       'Check that the model path is correct and the model file exists.'
     );
+  }
+}
+
+/**
+ * Ensures llama-server is running with the given configuration.
+ * Uses a shared Promise to handle concurrent calls.
+ */
+async function ensureLlamaServer(
+  config: Config,
+  workers: Worker[],
+  ctl: GeneratorController
+): Promise<void> {
+  const rpcArg = workers.length > 0 ? buildRpcArgument(workers) : '';
+  
+  // Check if we already have a server running with the same config
+  if (llamaServerProcess && currentRpcConfig === rpcArg) {
+    const inUse = await isPortInUse(LLAMA_SERVER_PORT);
+    if (inUse) {
+      ctl.statusUpdate('Reusing existing llama-server instance');
+      return;
+    }
+    // Process died, need to restart
+    llamaServerProcess = null;
+    currentRpcConfig = null;
+    serverReadyPromise = null;
+  }
+  
+  // If a startup is already in progress, wait for it
+  if (serverReadyPromise) {
+    ctl.statusUpdate('Waiting for server to start...');
+    await serverReadyPromise;
+    return;
+  }
+  
+  // Kill existing process if config changed
+  if (llamaServerProcess) {
+    ctl.statusUpdate('Worker configuration changed, restarting llama-server...');
+    llamaServerProcess.kill('SIGTERM');
+    llamaServerProcess = null;
+    currentRpcConfig = null;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  // Start the server and store the promise
+  serverReadyPromise = doSpawnLlamaServer(config, workers, ctl);
+  
+  try {
+    await serverReadyPromise;
+  } catch (err) {
+    // Reset promise on failure so next call can retry
+    serverReadyPromise = null;
+    throw err;
   }
 }
 
@@ -223,7 +245,7 @@ export async function generate(ctl: GeneratorController, history: Chat): Promise
   
   // Step 3: Start or reuse llama-server
   try {
-    await spawnLlamaServer(config, workers, ctl);
+    await ensureLlamaServer(config, workers, ctl);
   } catch (err) {
     const error = err as Error;
     ctl.statusUpdate(`Server error: ${error.message}`);
@@ -307,7 +329,7 @@ export async function testCluster(ctl: GeneratorController): Promise<{
   
   // Start server
   try {
-    await spawnLlamaServer(config, workers, ctl);
+    await ensureLlamaServer(config, workers, ctl);
   } catch (err) {
     const error = err as Error;
     return { success: false, error: error.message, workerCount: workers.length };
