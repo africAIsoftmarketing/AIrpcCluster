@@ -37,7 +37,7 @@ A distributed llama.cpp inference system for LM Studio that allows spreading inf
 - [x] `package.json` - Dependencies and scripts
 - [x] `tsconfig.json` - TypeScript configuration
 - [x] `vitest.config.ts` - Test configuration
-- [x] `src/config.ts` - Configuration management with Zod validation
+- [x] `src/config.ts` - Configuration management with Zod validation (includes workers array)
 - [x] `src/discovery.ts` - UDP worker discovery with deduplication
 - [x] `src/generator.ts` - Main generator with llama-server management
 - [x] `src/utils.ts` - Utility functions (waitForPort, getLocalIP, etc.)
@@ -68,8 +68,14 @@ A distributed llama.cpp inference system for LM Studio that allows spreading inf
 - [x] Optional code signing support
 
 ### Documentation
-- [x] `README.md` - Full setup guide and documentation
+- [x] `README.md` - Full setup guide with Configurator App instructions
 - [x] `Makefile` - Build orchestration
+
+## Configuration Schema
+
+Config file location:
+- macOS: `~/Library/Application Support/rpc-cluster/config.json`
+- Windows: `%APPDATA%\rpc-cluster\config.json`
 
 ## Test Status
 - 40 tests passing
@@ -102,6 +108,16 @@ A distributed llama.cpp inference system for LM Studio that allows spreading inf
 | nGpuLayers | number | 99 | GPU layers to offload |
 | maxTokens | number | 2048 | Max generation tokens |
 | temperature | number | 0.7 | Sampling temperature |
+| workers | array | [] | Configured workers list |
+
+### Worker Object Fields
+| Field | Type | Description |
+|-------|------|-------------|
+| hostname | string | Worker machine hostname |
+| ip | string | Worker IP address |
+| port | number | RPC server port (50052) |
+| vramGB | number | Detected VRAM (0 = CPU) |
+| enabled | boolean | Include in inference |
 
 ## Network Ports
 - UDP 5005: Worker discovery

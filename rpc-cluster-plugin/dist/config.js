@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_CONFIG = exports.ConfigSchema = void 0;
+exports.DEFAULT_CONFIG = exports.ConfigSchema = exports.WorkerSchema = void 0;
 exports.getConfigPath = getConfigPath;
 exports.loadConfig = loadConfig;
 exports.saveConfig = saveConfig;
@@ -41,6 +41,16 @@ exports.formatDiscoveredWorkers = formatDiscoveredWorkers;
 const zod_1 = require("zod");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+/**
+ * Worker configuration schema
+ */
+exports.WorkerSchema = zod_1.z.object({
+    hostname: zod_1.z.string().min(1),
+    ip: zod_1.z.string().min(1),
+    port: zod_1.z.number().int().positive().default(50052),
+    vramGB: zod_1.z.number().min(0).default(0),
+    enabled: zod_1.z.boolean().default(true)
+});
 /**
  * Configuration schema for the RPC Cluster plugin
  */
@@ -50,6 +60,7 @@ exports.ConfigSchema = zod_1.z.object({
     nGpuLayers: zod_1.z.number().int().min(-1).default(99),
     maxTokens: zod_1.z.number().int().positive().default(2048),
     temperature: zod_1.z.number().min(0).max(2).default(0.7),
+    workers: zod_1.z.array(exports.WorkerSchema).default([]),
     discoveredWorkers: zod_1.z.string().optional().default('')
 });
 /**
@@ -61,12 +72,13 @@ exports.DEFAULT_CONFIG = {
     nGpuLayers: 99,
     maxTokens: 2048,
     temperature: 0.7,
+    workers: [],
     discoveredWorkers: ''
 };
 /**
  * Path to the configuration file
  */
-const CONFIG_FILE_NAME = 'rpc-cluster-config.json';
+const CONFIG_FILE_NAME = 'config.json';
 /**
  * Get the configuration file path based on platform
  */

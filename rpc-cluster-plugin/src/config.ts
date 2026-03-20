@@ -3,6 +3,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
+ * Worker configuration schema
+ */
+export const WorkerSchema = z.object({
+  hostname: z.string().min(1),
+  ip: z.string().min(1),
+  port: z.number().int().positive().default(50052),
+  vramGB: z.number().min(0).default(0),
+  enabled: z.boolean().default(true)
+});
+
+export type WorkerConfig = z.infer<typeof WorkerSchema>;
+
+/**
  * Configuration schema for the RPC Cluster plugin
  */
 export const ConfigSchema = z.object({
@@ -11,6 +24,7 @@ export const ConfigSchema = z.object({
   nGpuLayers: z.number().int().min(-1).default(99),
   maxTokens: z.number().int().positive().default(2048),
   temperature: z.number().min(0).max(2).default(0.7),
+  workers: z.array(WorkerSchema).default([]),
   discoveredWorkers: z.string().optional().default('')
 });
 
@@ -25,13 +39,14 @@ export const DEFAULT_CONFIG: Config = {
   nGpuLayers: 99,
   maxTokens: 2048,
   temperature: 0.7,
+  workers: [],
   discoveredWorkers: ''
 };
 
 /**
  * Path to the configuration file
  */
-const CONFIG_FILE_NAME = 'rpc-cluster-config.json';
+const CONFIG_FILE_NAME = 'config.json';
 
 /**
  * Get the configuration file path based on platform

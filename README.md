@@ -3,7 +3,8 @@
 Distribute LLM inference across multiple laptops on your local network using llama.cpp's RPC backend. This project provides:
 
 1. **LM Studio Plugin** - A generator plugin that auto-discovers worker machines and distributes inference
-2. **Worker Installers** - Native installers for Windows and macOS that set up workers as background services
+2. **Configurator App** - An Electron app for scanning the network and configuring the cluster
+3. **Worker Installers** - Native installers for Windows and macOS that set up workers as background services
 
 ## How It Works
 
@@ -61,25 +62,30 @@ Run the installer. The RPC server and discovery beacon will start automatically 
 git clone https://github.com/your-org/rpc-cluster.git
 cd rpc-cluster
 
-# Build the plugin
+# Install dependencies
 cd rpc-cluster-plugin
 npm install
-npm run build
 
-# Install to LM Studio (adjust path as needed)
-cp -r . ~/.lmstudio/plugins/rpc-cluster/
+# Run in development mode - the plugin appears automatically in LM Studio
+npm run dev
 ```
 
-### 3. Configure the Plugin
+The plugin will be available in LM Studio while `npm run dev` (which runs `lms dev`) is active. For production deployment, build the plugin and follow LM Studio's plugin installation guide.
 
-1. Open LM Studio
-2. Go to **Settings** → **Plugins** → **RPC Cluster**
-3. Set the **Model Path** to your `.gguf` file
-4. Adjust other settings as needed:
-   - **Discovery Timeout**: How long to scan for workers (default: 4s)
-   - **GPU Layers**: Layers to offload to GPU (default: 99)
-   - **Max Tokens**: Maximum generation length (default: 2048)
-   - **Temperature**: Sampling temperature (default: 0.7)
+### 3. Configure with the Configurator App
+
+Download and open **RPC Cluster Configurator** (the Electron app included in releases).
+
+1. Click **Scan LAN** to discover all worker machines on your network
+2. Review the discovered workers - each shows hostname, IP, and VRAM
+3. Enable/disable individual workers using the checkboxes
+4. Select a model from the **Model** dropdown (lists `.gguf` files from your LM Studio models directory)
+5. Adjust inference settings (GPU layers, max tokens, temperature) if needed
+6. Click **Save & Launch** to write the configuration and open LM Studio
+
+The configuration is saved to:
+- **macOS**: `~/Library/Application Support/rpc-cluster/config.json`
+- **Windows**: `%APPDATA%\rpc-cluster\config.json`
 
 ### 4. Start Using
 
@@ -98,7 +104,7 @@ cd rpc-cluster-plugin
 npm install
 npm run build    # Compile TypeScript
 npm test         # Run tests
-npm run dev      # Development mode with hot reload
+npm run dev      # Development mode - plugin auto-loads in LM Studio
 ```
 
 ### Worker Beacon
@@ -195,7 +201,9 @@ If port 18080 is already in use:
 lsof -i :18080          # macOS/Linux
 netstat -ano | findstr :18080  # Windows
 
-# Kill it or change the port in config
+# Kill the process using that port
+kill <PID>              # macOS/Linux
+taskkill /PID <PID> /F  # Windows
 ```
 
 ### Model Not Found
@@ -213,33 +221,89 @@ Ensure the model path in plugin config:
    - macOS: `tail -f /var/log/rpc-server.log`
    - Windows: Event Viewer → Windows Logs → Application
 
+### First Inference is Very Slow
+
+On the first run with a new model or new workers, `llama-server` must transfer the model weights to each worker over the network. This is expected behavior:
+
+- **Wi-Fi**: 5-10 minutes for a 70B model (depending on network speed)
+- **Gigabit Ethernet**: 2-4 minutes for a 70B model
+
+Subsequent runs use the local tensor cache on each worker (`/var/cache/llama-rpc` on macOS, `{app}\tensor-cache` on Windows) and start almost instantly.
+
+**Tip**: For faster initial setup, use a wired Ethernet connection for the first model load.
+
+### Changing the llama-server Port
+
+The llama-server API port (18080) is currently hardcoded in the plugin. To change it:
+
+1. Open `rpc-cluster-plugin/src/generator.ts`
+2. Find the constant `LLAMA_SERVER_PORT` near the top of the file
+3. Change the value to your desired port
+4. Rebuild the plugin: `npm run build`
+5. Restart LM Studio
+
+Note: This only changes the host-side API port. The worker RPC port (50052) is configured separately in the worker installers.
+
 ## Architecture
 
 ```
 rpc-cluster/
-├── rpc-cluster-plugin/     # LM Studio generator plugin
+├── rpc-cluster-plugin/         # LM Studio generator plugin
 │   ├── src/
-│   │   ├── config.ts       # Configuration management
-│   │   ├── discovery.ts    # UDP worker discovery
-│   │   ├── generator.ts    # Main generator interface
-│   │   └── utils.ts        # Helper functions
-│   └── manifest.json       # Plugin metadata
+│   │   ├── __tests__/          # Unit tests (vitest)
+│   │   │   ├── config.test.ts
+│   │   │   ├── discovery.test.ts
+│   │   │   └── utils.test.ts
+│   │   ├── config.ts           # Configuration management
+│   │   ├── discovery.ts        # UDP worker discovery
+│   │   ├── generator.ts        # Main generator interface
+│   │   └── utils.ts            # Helper functions
+│   ├── manifest.json           # Plugin metadata
+│   ├── package.json
+│   └── tsconfig.json
 │
-├── worker-beacon/          # Worker discovery beacon
-│   ├── beacon.js           # Broadcast script
-│   └── build.sh            # SEA compilation
+├── configurator/               # Electron configurator app
+│   ├── main.js                 # Main process
+│   ├── preload.js              # Preload script
+│   ├── renderer/               # UI components
+│   └── shared/                 # Shared utilities
+│
+├── worker-beacon/              # Worker discovery beacon
+│   ├── beacon.js               # Broadcast script
+│   ├── build.sh                # SEA compilation
+│   ├── package.json
+│   └── sea-config.json
 │
 ├── installers/
-│   ├── windows/            # Inno Setup installer
-│   └── macos/              # pkgbuild installer
+│   ├── windows/                # Inno Setup installer
+│   │   ├── setup.iss
+│   │   └── build-windows-installer.ps1
+│   └── macos/                  # pkgbuild installer
+│       ├── build-macos-installer.sh
+│       ├── Distribution.xml
+│       ├── launchd/
+│       └── scripts/
 │
-├── .github/workflows/      # CI/CD pipelines
-└── Makefile                # Build orchestration
+├── .github/
+│   └── workflows/
+│       ├── build-windows.yml   # Windows CI pipeline
+│       └── build-macos.yml     # macOS CI pipeline
+│
+├── vendor/                     # Pre-built binaries (not in git)
+│   ├── windows/
+│   └── macos/
+│
+├── Makefile                    # Build orchestration
+└── README.md
 ```
 
 ## Configuration Reference
 
-### Plugin Config (`rpc-cluster-config.json`)
+### Config File (`config.json`)
+
+Located at:
+- **macOS**: `~/Library/Application Support/rpc-cluster/config.json`
+- **Windows**: `%APPDATA%\rpc-cluster\config.json`
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -248,6 +312,52 @@ rpc-cluster/
 | `nGpuLayers` | number | 99 | GPU layers to offload |
 | `maxTokens` | number | 2048 | Max tokens to generate |
 | `temperature` | number | 0.7 | Sampling temperature |
+| `workers` | array | [] | List of configured workers |
+
+### Worker Object (in `workers` array)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `hostname` | string | Worker machine hostname |
+| `ip` | string | Worker IP address |
+| `port` | number | RPC server port (default: 50052) |
+| `vramGB` | number | Detected VRAM in gigabytes (0 = CPU only) |
+| `enabled` | boolean | Whether to include this worker in inference |
+
+### Example Config
+
+```json
+{
+  "modelPath": "/Users/alice/models/llama-3-70b.gguf",
+  "discoveryTimeoutMs": 4000,
+  "nGpuLayers": 99,
+  "maxTokens": 2048,
+  "temperature": 0.7,
+  "workers": [
+    {
+      "hostname": "MacBook-Pro-Bob",
+      "ip": "192.168.1.101",
+      "port": 50052,
+      "vramGB": 16,
+      "enabled": true
+    },
+    {
+      "hostname": "Gaming-PC",
+      "ip": "192.168.1.102",
+      "port": 50052,
+      "vramGB": 24,
+      "enabled": true
+    },
+    {
+      "hostname": "Old-Laptop",
+      "ip": "192.168.1.103",
+      "port": 50052,
+      "vramGB": 0,
+      "enabled": false
+    }
+  ]
+}
+```
 
 ### Network Ports
 

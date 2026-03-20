@@ -1,5 +1,28 @@
 import { z } from 'zod';
 /**
+ * Worker configuration schema
+ */
+export declare const WorkerSchema: z.ZodObject<{
+    hostname: z.ZodString;
+    ip: z.ZodString;
+    port: z.ZodDefault<z.ZodNumber>;
+    vramGB: z.ZodDefault<z.ZodNumber>;
+    enabled: z.ZodDefault<z.ZodBoolean>;
+}, "strip", z.ZodTypeAny, {
+    hostname: string;
+    ip: string;
+    port: number;
+    vramGB: number;
+    enabled: boolean;
+}, {
+    hostname: string;
+    ip: string;
+    port?: number | undefined;
+    vramGB?: number | undefined;
+    enabled?: boolean | undefined;
+}>;
+export type WorkerConfig = z.infer<typeof WorkerSchema>;
+/**
  * Configuration schema for the RPC Cluster plugin
  */
 export declare const ConfigSchema: z.ZodObject<{
@@ -8,6 +31,25 @@ export declare const ConfigSchema: z.ZodObject<{
     nGpuLayers: z.ZodDefault<z.ZodNumber>;
     maxTokens: z.ZodDefault<z.ZodNumber>;
     temperature: z.ZodDefault<z.ZodNumber>;
+    workers: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        hostname: z.ZodString;
+        ip: z.ZodString;
+        port: z.ZodDefault<z.ZodNumber>;
+        vramGB: z.ZodDefault<z.ZodNumber>;
+        enabled: z.ZodDefault<z.ZodBoolean>;
+    }, "strip", z.ZodTypeAny, {
+        hostname: string;
+        ip: string;
+        port: number;
+        vramGB: number;
+        enabled: boolean;
+    }, {
+        hostname: string;
+        ip: string;
+        port?: number | undefined;
+        vramGB?: number | undefined;
+        enabled?: boolean | undefined;
+    }>, "many">>;
     discoveredWorkers: z.ZodDefault<z.ZodOptional<z.ZodString>>;
 }, "strip", z.ZodTypeAny, {
     modelPath: string;
@@ -15,6 +57,13 @@ export declare const ConfigSchema: z.ZodObject<{
     nGpuLayers: number;
     maxTokens: number;
     temperature: number;
+    workers: {
+        hostname: string;
+        ip: string;
+        port: number;
+        vramGB: number;
+        enabled: boolean;
+    }[];
     discoveredWorkers: string;
 }, {
     modelPath: string;
@@ -22,6 +71,13 @@ export declare const ConfigSchema: z.ZodObject<{
     nGpuLayers?: number | undefined;
     maxTokens?: number | undefined;
     temperature?: number | undefined;
+    workers?: {
+        hostname: string;
+        ip: string;
+        port?: number | undefined;
+        vramGB?: number | undefined;
+        enabled?: boolean | undefined;
+    }[] | undefined;
     discoveredWorkers?: string | undefined;
 }>;
 export type Config = z.infer<typeof ConfigSchema>;

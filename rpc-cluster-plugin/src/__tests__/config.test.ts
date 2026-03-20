@@ -21,7 +21,9 @@ describe('loadConfig', () => {
     
     const config = loadConfig();
     
-    expect(config).toEqual(DEFAULT_CONFIG);
+    expect(config.modelPath).toBe('');
+    expect(config.workers).toEqual([]);
+    expect(config.discoveryTimeoutMs).toBe(4000);
   });
   
   it('should throw error when file cannot be read', () => {
@@ -51,13 +53,22 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('Invalid configuration');
   });
   
-  it('should load valid config file', () => {
+  it('should load valid config file with workers', () => {
     const validConfig = {
       modelPath: '/path/to/model.gguf',
       discoveryTimeoutMs: 5000,
       nGpuLayers: 32,
       maxTokens: 1024,
-      temperature: 0.5
+      temperature: 0.5,
+      workers: [
+        {
+          hostname: 'worker-1',
+          ip: '192.168.1.10',
+          port: 50052,
+          vramGB: 8,
+          enabled: true
+        }
+      ]
     };
     
     vi.mocked(fs.existsSync).mockReturnValue(true);
@@ -70,6 +81,8 @@ describe('loadConfig', () => {
     expect(config.nGpuLayers).toBe(32);
     expect(config.maxTokens).toBe(1024);
     expect(config.temperature).toBe(0.5);
+    expect(config.workers).toHaveLength(1);
+    expect(config.workers[0].hostname).toBe('worker-1');
   });
   
   it('should apply defaults for missing optional fields', () => {
@@ -87,6 +100,7 @@ describe('loadConfig', () => {
     expect(config.nGpuLayers).toBe(99); // default
     expect(config.maxTokens).toBe(2048); // default
     expect(config.temperature).toBe(0.7); // default
+    expect(config.workers).toEqual([]); // default
   });
 });
 
