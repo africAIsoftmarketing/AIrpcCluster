@@ -1,10 +1,10 @@
 # RPC Cluster - Distributed llama.cpp Inference
 # Makefile for building all components
 
-.PHONY: all plugin beacon installer-win installer-macos clean dev test help
+.PHONY: all plugin beacon configurator installer-win installer-macos clean dev test help
 
 # Default target
-all: plugin beacon
+all: plugin beacon configurator
 
 # Help target
 help:
@@ -12,11 +12,13 @@ help:
 	@echo ""
 	@echo "  make plugin         - Build the LM Studio plugin (TypeScript)"
 	@echo "  make beacon         - Build the worker beacon executable"
+	@echo "  make configurator   - Build the Configurator Electron app"
 	@echo "  make installer-win  - Build Windows installer (requires Windows + Inno Setup)"
 	@echo "  make installer-macos- Build macOS installer (requires macOS)"
-	@echo "  make all            - Build plugin and beacon"
+	@echo "  make all            - Build plugin, beacon, and configurator"
 	@echo "  make test           - Run plugin tests"
 	@echo "  make dev            - Run plugin in development mode"
+	@echo "  make dev-config     - Run configurator in development mode"
 	@echo "  make clean          - Remove all build artifacts"
 	@echo ""
 	@echo "Note: Installer targets require platform-specific tools:"
@@ -44,6 +46,17 @@ beacon:
 	@echo "=== Building Worker Beacon ==="
 	cd worker-beacon && chmod +x build.sh && ./build.sh
 	@echo "Beacon built: worker-beacon/dist/"
+
+# Build Configurator
+configurator:
+	@echo "=== Building Configurator ==="
+	cd configurator && npm install
+	@echo "Configurator ready. Run 'make dev-config' to start."
+
+# Run Configurator in development mode
+dev-config:
+	@echo "=== Starting Configurator ==="
+	cd configurator && npm start
 
 # Build Windows installer (must run on Windows)
 installer-win:
@@ -77,6 +90,8 @@ clean:
 	rm -rf rpc-cluster-plugin/node_modules
 	rm -rf worker-beacon/dist
 	rm -rf worker-beacon/sea-prep.blob
+	rm -rf configurator/dist
+	rm -rf configurator/node_modules
 	rm -rf installers/macos/build
 	rm -rf dist
 	@echo "Clean complete"
@@ -85,6 +100,7 @@ clean:
 setup:
 	@echo "=== Installing Development Dependencies ==="
 	cd rpc-cluster-plugin && npm install
+	cd configurator && npm install
 	@echo "Setup complete"
 
 # Lint code

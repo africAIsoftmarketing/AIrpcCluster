@@ -39,9 +39,17 @@ A distributed llama.cpp inference system for LM Studio that allows spreading inf
 - [x] `vitest.config.ts` - Test configuration
 - [x] `src/config.ts` - Configuration management with Zod validation (includes workers array)
 - [x] `src/discovery.ts` - UDP worker discovery with deduplication
-- [x] `src/generator.ts` - Main generator with llama-server management
+- [x] `src/generator.ts` - Main generator with llama-server management and Promise-based race condition guard
 - [x] `src/utils.ts` - Utility functions (waitForPort, getLocalIP, etc.)
-- [x] `src/__tests__/` - 40 passing unit tests
+- [x] `src/__tests__/` - 54 passing unit tests
+
+### Configurator App (Electron)
+- [x] `package.json` - Electron 31 + electron-builder
+- [x] `electron-builder.yml` - Build configuration for mac/win
+- [x] `main.js` - Main process with 6 IPC handlers (all with try/catch)
+- [x] `preload.js` - Secure context bridge exposing 6 functions
+- [x] `renderer/index.html` - Complete single-file app (inline CSS + JS)
+- [x] `shared/discovery.js` - UDP worker discovery (CommonJS, exports discoverWorkers + CONFIG_PATH)
 
 ### Worker Beacon
 - [x] `beacon.js` - UDP broadcast script with VRAM detection
@@ -69,6 +77,7 @@ A distributed llama.cpp inference system for LM Studio that allows spreading inf
 
 ### Documentation
 - [x] `README.md` - Full setup guide with Configurator App instructions
+- [x] `VALIDATION.md` - Foundation validation checklist
 - [x] `Makefile` - Build orchestration
 
 ## Configuration Schema

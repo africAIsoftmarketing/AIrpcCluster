@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:*">
+  <title>RPC Cluster Configurator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1a1a1a;
+      color: #e8e8e8;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .header .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .config-path-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .config-path {
+      font-family: monospace;
+      font-size: 11px;
+      color: #888;
+    }
+
+    .open-folder-link {
+      font-size: 11px;
+      color: #7c6df0;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .open-folder-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Cards */
+    .card {
+      background: #242424;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .step-badge {
+      width: 24px;
+      height: 24px;
+      background: #7c6df0;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: #7c6df0;
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #8d80f5;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #7c6df0;
+      border: 1px solid #7c6df0;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(124, 109, 240, 0.1);
+    }
+
+    .btn-full {
+      width: 100%;
+      padding: 14px;
+    }
+
+    .btn-success {
+      background: #4caf50;
+      color: white;
+    }
+
+    .btn-error {
+      background: #f44336;
+      color: white;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Workers Table */
+    .workers-table {
+      width: 100%;
+      margin-top: 16px;
+    }
+
+    .workers-table th {
+      text-align: left;
+      font-size: 12px;
+      font-weight: 500;
+      color: #888;
+      padding: 8px 12px;
+      border-bottom: 1px solid #333;
+    }
+
+    .workers-table td {
+      padding: 12px;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 14px;
+    }
+
+    .workers-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .workers-table input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #7c6df0;
+    }
+
+    /* Warning/Info boxes */
+    .warning-box {
+      background: #2a2000;
+      border-left: 3px solid #ff9800;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .info-box {
+      background: #2a2a2a;
+      border-left: 3px solid #666;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .success-box {
+      background: rgba(76, 175, 80, 0.1);
+      border: 1px solid #4caf50;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-top: 16px;
+      border-radius: 6px;
+      color: #4caf50;
+    }
+
+    .error-box {
+      background: rgba(244, 67, 54, 0.1);
+      border: 1px solid #f44336;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-top: 12px;
+      border-radius: 6px;
+      color: #f44336;
+    }
+
+    /* Models List */
+    .models-list {
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid #333;
+      border-radius: 6px;
+      margin-top: 12px;
+    }
+
+    .model-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .model-item:last-child {
+      border-bottom: none;
+    }
+
+    .model-item:hover {
+      background: #2a2a2a;
+    }
+
+    .model-item.selected {
+      background: #2d2a3e;
+      border-left: 3px solid #7c6df0;
+    }
+
+    .model-item input[type="radio"] {
+      margin-right: 12px;
+      accent-color: #7c6df0;
+    }
+
+    .model-name {
+      flex: 1;
+      font-size: 14px;
+    }
+
+    .model-size {
+      font-size: 13px;
+      color: #888;
+    }
+
+    /* Text Input */
+    .input-group {
+      margin-top: 16px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .input {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #e8e8e8;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: #7c6df0;
+    }
+
+    /* Advanced Settings */
+    .advanced-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #888;
+      user-select: none;
+    }
+
+    .advanced-toggle:hover {
+      color: #e8e8e8;
+    }
+
+    .advanced-content {
+      display: none;
+      margin-top: 16px;
+    }
+
+    .advanced-content.expanded {
+      display: block;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Summary */
+    .summary-card {
+      background: #1e1e2e;
+      border: 1px solid #7c6df0;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .summary-row {
+      display: flex;
+      margin-bottom: 8px;
+    }
+
+    .summary-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .summary-label {
+      width: 100px;
+      font-size: 13px;
+      color: #888;
+    }
+
+    .summary-value {
+      flex: 1;
+      font-size: 13px;
+    }
+
+    .summary-value.not-set {
+      color: #888;
+      font-style: italic;
+    }
+
+    .summary-secondary {
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    /* Test Result */
+    .test-result {
+      margin-top: 12px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .test-result.success {
+      background: rgba(76, 175, 80, 0.1);
+      border: 1px solid #4caf50;
+    }
+
+    .test-result.error {
+      background: rgba(244, 67, 54, 0.1);
+      border: 1px solid #f44336;
+    }
+
+    .test-result-title {
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .test-result.success .test-result-title {
+      color: #4caf50;
+    }
+
+    .test-result.error .test-result-title {
+      color: #f44336;
+    }
+
+    /* Links */
+    .footer-link {
+      display: inline-block;
+      margin-top: 16px;
+      font-size: 12px;
+      color: #888;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .footer-link:hover {
+      color: #7c6df0;
+    }
+
+    /* Hidden utility */
+    .hidden {
+      display: none !important;
+    }
+
+    /* Button row */
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>RPC Cluster</h1>
+      <p class="subtitle">Distributed llama.cpp inference configurator</p>
+      <div class="config-path-row">
+        <span id="config-path" class="config-path"></span>
+        <a id="open-folder-link" class="open-folder-link">Open folder →</a>
+      </div>
+    </header>
+
+    <!-- Step 1: Scan for workers -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge">1</div>
+        <h2 class="card-title">Scan for workers</h2>
+      </div>
+      
+      <button id="scan-btn" class="btn btn-primary">Scan LAN</button>
+      
+      <div id="workers-container" class="hidden">
+        <table class="workers-table">
+          <thead>
+            <tr>
+              <th>Hostname</th>
+              <th>IP Address</th>
+              <th>VRAM</th>
+              <th>Platform</th>
+              <th>Include</th>
+            </tr>
+          </thead>
+          <tbody id="workers-tbody"></tbody>
+        </table>
+      </div>
+      
+      <div id="no-workers-warning" class="warning-box hidden">
+        No workers detected. Ensure the RPC Cluster Worker app is installed and running on the other laptops. You can continue in local-only mode.
+      </div>
+      
+      <div class="btn-row">
+        <button id="rescan-btn" class="btn btn-secondary hidden">Rescan</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Select model -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge">2</div>
+        <h2 class="card-title">Select model</h2>
+      </div>
+      
+      <button id="browse-models-btn" class="btn btn-primary">Browse models</button>
+      
+      <div id="models-container" class="hidden">
+        <div id="models-list" class="models-list"></div>
+      </div>
+      
+      <div id="no-models-info" class="info-box hidden">
+        No .gguf models found in LM Studio's models folder. Download a model via LM Studio first, then click Refresh.
+        <button id="refresh-models-btn" class="btn btn-secondary" style="margin-top: 12px;">Refresh</button>
+      </div>
+      
+      <div class="input-group">
+        <label for="model-path-input">Or enter path manually</label>
+        <input type="text" id="model-path-input" class="input" placeholder="/path/to/model.gguf">
+      </div>
+    </div>
+
+    <!-- Step 3: Advanced settings -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge">3</div>
+        <h2 class="card-title">Advanced settings</h2>
+      </div>
+      
+      <div id="advanced-toggle" class="advanced-toggle">
+        <span id="advanced-arrow">▶</span>
+        <span>Show advanced settings</span>
+      </div>
+      
+      <div id="advanced-content" class="advanced-content">
+        <div class="settings-grid">
+          <div class="input-group" style="margin-top: 0;">
+            <label for="gpu-layers-input">GPU layers</label>
+            <input type="number" id="gpu-layers-input" class="input" value="99" min="0" max="999">
+          </div>
+          
+          <div class="input-group" style="margin-top: 0;">
+            <label for="max-tokens-input">Max tokens</label>
+            <input type="number" id="max-tokens-input" class="input" value="2048" min="1" max="32768">
+          </div>
+          
+          <div class="input-group" style="margin-top: 0;">
+            <label for="temperature-input">Temperature</label>
+            <input type="number" id="temperature-input" class="input" value="0.7" min="0" max="2" step="0.1">
+          </div>
+          
+          <div class="input-group" style="margin-top: 0;">
+            <label for="discovery-ms-input">Discovery ms</label>
+            <input type="number" id="discovery-ms-input" class="input" value="4000" min="1000" max="30000" step="500">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Save & test -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge">4</div>
+        <h2 class="card-title">Save & test</h2>
+      </div>
+      
+      <div class="summary-card">
+        <div class="summary-row">
+          <span class="summary-label">Model:</span>
+          <span id="summary-model" class="summary-value not-set">Not selected</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Workers:</span>
+          <span id="summary-workers" class="summary-value">Local only (no workers)</span>
+        </div>
+        <div id="summary-secondary" class="summary-secondary"></div>
+      </div>
+      
+      <button id="save-btn" class="btn btn-primary btn-full">Save configuration</button>
+      
+      <div id="save-error" class="error-box hidden"></div>
+      
+      <div id="save-success" class="success-box hidden">
+        Configuration saved. Open LM Studio and select RPC Cluster in the model picker to start using your cluster.
+      </div>
+      
+      <button id="test-btn" class="btn btn-secondary btn-full hidden" style="margin-top: 12px;">Test cluster</button>
+      
+      <div id="test-result" class="test-result hidden">
+        <div id="test-result-title" class="test-result-title"></div>
+        <div id="test-result-message"></div>
+      </div>
+      
+      <a id="footer-open-folder" class="footer-link">Open config folder →</a>
+    </div>
+  </div>
+
+  <script>
+    // State
+    const state = {
+      workers: [],
+      modelPath: '',
+      nGpuLayers: 99,
+      maxTokens: 2048,
+      temperature: 0.7,
+      discoveryTimeoutMs: 4000,
+      configSaved: false,
+    };
+
+    // Platform helpers
+    function getPlatformName(platform) {
+      const map = {
+        'win32': 'Windows',
+        'darwin': 'macOS',
+        'linux': 'Linux'
+      };
+      return map[platform] || platform;
+    }
+
+    function getConfigPath() {
+      // This is just for display - actual path is determined in main process
+      const home = '~';
+      const platform = navigator.platform.toLowerCase();
+      if (platform.includes('mac')) {
+        return `${home}/Library/Application Support/rpc-cluster/config.json`;
+      } else if (platform.includes('win')) {
+        return '%APPDATA%\\rpc-cluster\\config.json';
+      }
+      return `${home}/.config/rpc-cluster/config.json`;
+    }
+
+    // Build config object
+    function buildConfig() {
+      return {
+        modelPath: state.modelPath,
+        nGpuLayers: state.nGpuLayers,
+        maxTokens: state.maxTokens,
+        temperature: state.temperature,
+        discoveryTimeoutMs: state.discoveryTimeoutMs,
+        workers: state.workers.map(w => ({ ...w }))
+      };
+    }
+
+    // Update summary display
+    function updateSummary() {
+      const modelEl = document.getElementById('summary-model');
+      const workersEl = document.getElementById('summary-workers');
+      const secondaryEl = document.getElementById('summary-secondary');
+      
+      if (state.modelPath) {
+        const filename = state.modelPath.split(/[/\\]/).pop();
+        modelEl.textContent = filename;
+        modelEl.classList.remove('not-set');
+      } else {
+        modelEl.textContent = 'Not selected';
+        modelEl.classList.add('not-set');
+      }
+      
+      const enabledWorkers = state.workers.filter(w => w.enabled);
+      if (enabledWorkers.length === 0) {
+        workersEl.textContent = 'Local only (no workers)';
+      } else {
+        const names = enabledWorkers.map(w => w.hostname).join(', ');
+        workersEl.textContent = `${enabledWorkers.length} worker(s): ${names}`;
+      }
+      
+      secondaryEl.textContent = `GPU layers: ${state.nGpuLayers} · Max tokens: ${state.maxTokens} · Temperature: ${state.temperature}`;
+    }
+
+    // Render workers table
+    function renderWorkers() {
+      const container = document.getElementById('workers-container');
+      const tbody = document.getElementById('workers-tbody');
+      const warning = document.getElementById('no-workers-warning');
+      const rescanBtn = document.getElementById('rescan-btn');
+      
+      rescanBtn.classList.remove('hidden');
+      
+      if (state.workers.length === 0) {
+        container.classList.add('hidden');
+        warning.classList.remove('hidden');
+      } else {
+        container.classList.remove('hidden');
+        warning.classList.add('hidden');
+        
+        tbody.innerHTML = state.workers.map((worker, index) => `
+          <tr>
+            <td>${escapeHtml(worker.hostname)}</td>
+            <td>${worker.ip}:${worker.port}</td>
+            <td>${worker.vramGB > 0 ? worker.vramGB + ' GB' : 'CPU only'}</td>
+            <td>${getPlatformName(worker.platform)}</td>
+            <td><input type="checkbox" data-index="${index}" ${worker.enabled ? 'checked' : ''}></td>
+          </tr>
+        `).join('');
+        
+        // Add checkbox listeners
+        tbody.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            state.workers[idx].enabled = e.target.checked;
+            updateSummary();
+          });
+        });
+      }
+      
+      updateSummary();
+    }
+
+    // Render models list
+    function renderModels(models) {
+      const container = document.getElementById('models-container');
+      const list = document.getElementById('models-list');
+      const noModels = document.getElementById('no-models-info');
+      
+      if (models.length === 0) {
+        container.classList.add('hidden');
+        noModels.classList.remove('hidden');
+      } else {
+        container.classList.remove('hidden');
+        noModels.classList.add('hidden');
+        
+        list.innerHTML = models.map((model, index) => `
+          <div class="model-item ${model.path === state.modelPath ? 'selected' : ''}" data-path="${escapeAttr(model.path)}">
+            <input type="radio" name="model" ${model.path === state.modelPath ? 'checked' : ''}>
+            <span class="model-name">${escapeHtml(model.name)}</span>
+            <span class="model-size">${model.sizeGB} GB</span>
+          </div>
+        `).join('');
+        
+        // Add click listeners
+        list.querySelectorAll('.model-item').forEach(item => {
+          item.addEventListener('click', () => {
+            state.modelPath = item.dataset.path;
+            document.getElementById('model-path-input').value = state.modelPath;
+            renderModels(models);
+            updateSummary();
+          });
+        });
+      }
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Escape attribute
+    function escapeAttr(text) {
+      return text.replace(/"/g, '&quot;');
+    }
+
+    // Scan workers
+    async function scanWorkers() {
+      const scanBtn = document.getElementById('scan-btn');
+      const rescanBtn = document.getElementById('rescan-btn');
+      
+      scanBtn.disabled = true;
+      rescanBtn.disabled = true;
+      scanBtn.innerHTML = '<div class="spinner"></div> Scanning… (4s)';
+      
+      try {
+        const result = await window.rpcCluster.scanWorkers();
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        state.workers = result.map(w => ({ ...w, enabled: true }));
+        renderWorkers();
+      } catch (err) {
+        console.error('Scan failed:', err);
+        state.workers = [];
+        renderWorkers();
+      } finally {
+        scanBtn.disabled = false;
+        rescanBtn.disabled = false;
+        scanBtn.innerHTML = 'Scan LAN';
+      }
+    }
+
+    // List models
+    async function listModels() {
+      const btn = document.getElementById('browse-models-btn');
+      btn.disabled = true;
+      btn.textContent = 'Scanning…';
+      
+      try {
+        const models = await window.rpcCluster.listModels();
+        renderModels(models);
+      } catch (err) {
+        console.error('List models failed:', err);
+        renderModels([]);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Browse models';
+      }
+    }
+
+    // Save config
+    async function saveConfig() {
+      const btn = document.getElementById('save-btn');
+      const errorEl = document.getElementById('save-error');
+      const successEl = document.getElementById('save-success');
+      const testBtn = document.getElementById('test-btn');
+      
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      errorEl.classList.add('hidden');
+      successEl.classList.add('hidden');
+      
+      try {
+        const result = await window.rpcCluster.saveConfig(buildConfig());
+        
+        if (result.ok) {
+          state.configSaved = true;
+          btn.classList.remove('btn-primary', 'btn-error');
+          btn.classList.add('btn-success');
+          btn.textContent = 'Saved ✓';
+          successEl.classList.remove('hidden');
+          testBtn.classList.remove('hidden');
+        } else {
+          throw new Error(result.error);
+        }
+      } catch (err) {
+        btn.classList.remove('btn-primary', 'btn-success');
+        btn.classList.add('btn-error');
+        btn.textContent = 'Save failed — see error below';
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+        btn.disabled = false;
+      }
+    }
+
+    // Test cluster
+    async function testCluster() {
+      const btn = document.getElementById('test-btn');
+      const resultEl = document.getElementById('test-result');
+      const titleEl = document.getElementById('test-result-title');
+      const messageEl = document.getElementById('test-result-message');
+      
+      btn.disabled = true;
+      btn.textContent = 'Testing… (this may take up to 30s)';
+      resultEl.classList.add('hidden');
+      
+      try {
+        const result = await window.rpcCluster.testCluster(buildConfig());
+        
+        resultEl.classList.remove('hidden', 'success', 'error');
+        
+        if (result.ok) {
+          resultEl.classList.add('success');
+          titleEl.textContent = `✓ Cluster responded in ${(result.durationMs / 1000).toFixed(1)}s`;
+          messageEl.textContent = `Response: "${result.response}"`;
+        } else {
+          resultEl.classList.add('error');
+          titleEl.textContent = '✗ Test failed';
+          messageEl.textContent = result.error;
+        }
+      } catch (err) {
+        resultEl.classList.remove('hidden', 'success');
+        resultEl.classList.add('error');
+        titleEl.textContent = '✗ Test failed';
+        messageEl.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Test cluster';
+      }
+    }
+
+    // Open config folder
+    async function openConfigFolder() {
+      await window.rpcCluster.openConfigFolder();
+    }
+
+    // Initialize
+    async function init() {
+      // Display config path
+      document.getElementById('config-path').textContent = getConfigPath();
+      
+      // Load existing config
+      const config = await window.rpcCluster.loadConfig();
+      if (config) {
+        state.modelPath = config.modelPath || '';
+        state.nGpuLayers = config.nGpuLayers ?? 99;
+        state.maxTokens = config.maxTokens ?? 2048;
+        state.temperature = config.temperature ?? 0.7;
+        state.discoveryTimeoutMs = config.discoveryTimeoutMs ?? 4000;
+        state.workers = config.workers || [];
+        state.configSaved = true;
+        
+        // Update form inputs
+        document.getElementById('model-path-input').value = state.modelPath;
+        document.getElementById('gpu-layers-input').value = state.nGpuLayers;
+        document.getElementById('max-tokens-input').value = state.maxTokens;
+        document.getElementById('temperature-input').value = state.temperature;
+        document.getElementById('discovery-ms-input').value = state.discoveryTimeoutMs;
+        
+        // Show workers if any
+        if (state.workers.length > 0) {
+          renderWorkers();
+        }
+        
+        // Show save success state and test button
+        const saveBtn = document.getElementById('save-btn');
+        saveBtn.classList.remove('btn-primary');
+        saveBtn.classList.add('btn-success');
+        saveBtn.textContent = 'Saved ✓';
+        document.getElementById('save-success').classList.remove('hidden');
+        document.getElementById('test-btn').classList.remove('hidden');
+      }
+      
+      updateSummary();
+      
+      // Event listeners
+      document.getElementById('scan-btn').addEventListener('click', scanWorkers);
+      document.getElementById('rescan-btn').addEventListener('click', scanWorkers);
+      document.getElementById('browse-models-btn').addEventListener('click', listModels);
+      document.getElementById('refresh-models-btn').addEventListener('click', listModels);
+      document.getElementById('save-btn').addEventListener('click', saveConfig);
+      document.getElementById('test-btn').addEventListener('click', testCluster);
+      document.getElementById('open-folder-link').addEventListener('click', openConfigFolder);
+      document.getElementById('footer-open-folder').addEventListener('click', openConfigFolder);
+      
+      // Model path input
+      document.getElementById('model-path-input').addEventListener('input', (e) => {
+        state.modelPath = e.target.value;
+        updateSummary();
+      });
+      
+      // Settings inputs
+      document.getElementById('gpu-layers-input').addEventListener('change', (e) => {
+        state.nGpuLayers = parseInt(e.target.value) || 99;
+        updateSummary();
+      });
+      
+      document.getElementById('max-tokens-input').addEventListener('change', (e) => {
+        state.maxTokens = parseInt(e.target.value) || 2048;
+        updateSummary();
+      });
+      
+      document.getElementById('temperature-input').addEventListener('change', (e) => {
+        state.temperature = parseFloat(e.target.value) || 0.7;
+        updateSummary();
+      });
+      
+      document.getElementById('discovery-ms-input').addEventListener('change', (e) => {
+        state.discoveryTimeoutMs = parseInt(e.target.value) || 4000;
+      });
+      
+      // Advanced toggle
+      document.getElementById('advanced-toggle').addEventListener('click', () => {
+        const content = document.getElementById('advanced-content');
+        const arrow = document.getElementById('advanced-arrow');
+        const isExpanded = content.classList.toggle('expanded');
+        arrow.textContent = isExpanded ? '▼' : '▶';
+      });
+    }
+
+    // Start
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

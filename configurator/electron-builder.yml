@@ -1,0 +1,13 @@
+appId: com.rpccluster.configurator
+productName: RPC Cluster
+mac:
+  category: public.app-category.utilities
+  target: dmg
+win:
+  target: nsis
+files:
+  - main.js
+  - preload.js
+  - renderer/**
+  - shared/**
+extraResources: []
