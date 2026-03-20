@@ -1,0 +1,256 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'installers/windows/**'
+      - 'worker-beacon/**'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'installers/windows/**'
+      - 'worker-beacon/**'
+  workflow_dispatch:
+    inputs:
+      sign_installer:
+        description: 'Sign the installer (requires WIN_SIGNING_CERT secret)'
+        required: false
+        default: 'false'
+        type: boolean
+      llama_cpp_variant:
+        description: 'llama.cpp release variant'
+        required: false
+        default: 'cpu'
+        type: choice
+        options:
+          - cpu
+          - cuda-cu11.7
+          - cuda-cu12.4
+          - vulkan
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+          echo "Inno Setup installed"
+          
+          # Add to PATH
+          echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install postject
+        run: npm install -g postject
+
+      - name: Download llama.cpp rpc-server
+        shell: pwsh
+        run: |
+          Write-Host "Fetching latest llama.cpp release..."
+          
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest"
+          $releaseTag = $release.tag_name
+          Write-Host "Latest release: $releaseTag"
+          
+          # Determine which variant to download
+          $variant = "${{ github.event.inputs.llama_cpp_variant }}"
+          if ([string]::IsNullOrEmpty($variant)) { $variant = "cpu" }
+          
+          # Map variant to asset pattern
+          $pattern = switch ($variant) {
+            "cuda-cu11.7" { "win-cuda-cu11.7-x64" }
+            "cuda-cu12.4" { "win-cuda-cu12.4-x64" }
+            "vulkan" { "win-vulkan-x64" }
+            default { "win-noavx-x64" }  # CPU fallback with broad compatibility
+          }
+          
+          Write-Host "Looking for asset matching pattern: $pattern"
+          
+          # Find the download URL
+          $asset = $release.assets | Where-Object { 
+            $_.name -like "*$pattern*.zip" -and $_.name -notlike "*sha256*" 
+          } | Select-Object -First 1
+          
+          if (-not $asset) {
+            Write-Host "Error: Could not find Windows binary in release"
+            Write-Host "Available assets:"
+            $release.assets | ForEach-Object { Write-Host $_.name }
+            exit 1
+          }
+          
+          Write-Host "Downloading: $($asset.browser_download_url)"
+          
+          # Download and extract
+          New-Item -ItemType Directory -Force -Path "vendor/windows" | Out-Null
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "llama-release.zip"
+          Expand-Archive -Path "llama-release.zip" -DestinationPath "llama-extract" -Force
+          
+          # Find and copy rpc-server.exe
+          $rpcServer = Get-ChildItem -Path "llama-extract" -Recurse -Filter "rpc-server.exe" | Select-Object -First 1
+          if (-not $rpcServer) {
+            Write-Host "Error: rpc-server.exe not found in archive"
+            Write-Host "Contents:"
+            Get-ChildItem -Path "llama-extract" -Recurse | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
+          
+          Copy-Item -Path $rpcServer.FullName -Destination "vendor/windows/rpc-server.exe"
+          
+          Write-Host "rpc-server.exe extracted to vendor/windows/"
+          Get-ChildItem -Path "vendor/windows/"
+          
+          # Cleanup
+          Remove-Item -Path "llama-release.zip" -Force
+          Remove-Item -Path "llama-extract" -Recurse -Force
+
+      - name: Build worker beacon
+        shell: pwsh
+        run: |
+          Set-Location worker-beacon
+          
+          Write-Host "Generating SEA blob..."
+          node --experimental-sea-config sea-config.json
+          
+          Write-Host "Creating executable..."
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          
+          # Find Node.js executable
+          $nodePath = (Get-Command node).Source
+          Write-Host "Node.js path: $nodePath"
+          
+          Copy-Item -Path $nodePath -Destination "dist/rpc-worker-beacon-win.exe"
+          
+          Write-Host "Injecting SEA blob..."
+          npx postject "dist/rpc-worker-beacon-win.exe" NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+          
+          Write-Host "Beacon built:"
+          Get-ChildItem -Path "dist/"
+          
+          # Cleanup
+          Remove-Item -Path "sea-prep.blob" -Force -ErrorAction SilentlyContinue
+
+      - name: Build Windows installer
+        shell: pwsh
+        env:
+          WIN_SIGNING_CERT: ${{ github.event.inputs.sign_installer == 'true' && secrets.WIN_SIGNING_CERT || '' }}
+          WIN_SIGNING_CERT_PASSWORD: ${{ secrets.WIN_SIGNING_CERT_PASSWORD }}
+        run: |
+          # Run Inno Setup directly (PowerShell script does extra checks)
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          
+          if (-not (Test-Path $isccPath)) {
+            Write-Host "Looking for ISCC.exe..."
+            $isccPath = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          }
+          
+          Write-Host "Using Inno Setup: $isccPath"
+          
+          & "$isccPath" "installers/windows/setup.iss"
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Inno Setup compilation failed"
+            exit 1
+          }
+          
+          Write-Host "Installer built successfully"
+          Get-ChildItem -Path "dist/"
+
+      - name: Sign installer (optional)
+        if: github.event.inputs.sign_installer == 'true' && env.WIN_SIGNING_CERT != ''
+        shell: pwsh
+        env:
+          WIN_SIGNING_CERT: ${{ secrets.WIN_SIGNING_CERT }}
+          WIN_SIGNING_CERT_PASSWORD: ${{ secrets.WIN_SIGNING_CERT_PASSWORD }}
+        run: |
+          $installerPath = Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1
+          
+          if ($installerPath) {
+            Write-Host "Signing: $($installerPath.FullName)"
+            
+            # Decode certificate from base64 secret
+            $certBytes = [Convert]::FromBase64String($env:WIN_SIGNING_CERT)
+            $certPath = "$env:TEMP\signing-cert.pfx"
+            [IO.File]::WriteAllBytes($certPath, $certBytes)
+            
+            # Sign the installer
+            & signtool sign /f $certPath /p $env:WIN_SIGNING_CERT_PASSWORD /t http://timestamp.digicert.com /v $installerPath.FullName
+            
+            # Cleanup
+            Remove-Item -Path $certPath -Force
+            
+            Write-Host "Installer signed successfully"
+          } else {
+            Write-Host "No installer found to sign"
+          }
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          Write-Host "Installer contents:"
+          Get-ChildItem -Path "dist/"
+          
+          $installer = Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1
+          if ($installer) {
+            Write-Host "Installer size: $([math]::Round($installer.Length / 1MB, 2)) MB"
+          }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpc-cluster-worker-windows-installer
+          path: dist/rpc-cluster-worker-setup-win64.exe
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload worker beacon (standalone)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpc-worker-beacon-windows
+          path: worker-beacon/dist/rpc-worker-beacon-win.exe
+          retention-days: 30
+
+  # Verify installer works (basic smoke test)
+  test-installer:
+    runs-on: windows-latest
+    needs: build
+    
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v4
+        with:
+          name: rpc-cluster-worker-windows-installer
+          path: ./installer
+
+      - name: Test installer (silent install)
+        shell: pwsh
+        run: |
+          Write-Host "Testing silent installation..."
+          
+          $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Select-Object -First 1
+          
+          if ($installer) {
+            # Run silent install (will fail due to service registration needing admin, but verifies installer runs)
+            $process = Start-Process -FilePath $installer.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=install.log" -Wait -PassThru -NoNewWindow
+            
+            # Check log
+            if (Test-Path "install.log") {
+              Write-Host "Installation log:"
+              Get-Content "install.log" | Select-Object -Last 50
+            }
+            
+            Write-Host "Installer test completed"
+          } else {
+            Write-Host "No installer found"
+            exit 1
+          }

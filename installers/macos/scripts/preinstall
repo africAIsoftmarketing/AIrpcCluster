@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# RPC Cluster Worker - Pre-install Script
+# Stops and unloads existing services for clean upgrade
+
+set -e
+
+echo "RPC Cluster Worker: Pre-install cleanup..."
+
+# Stop and unload existing daemons if they exist
+if launchctl list | grep -q "com.rpccluster.rpcserver"; then
+    echo "Stopping existing RPC server daemon..."
+    launchctl bootout system/com.rpccluster.rpcserver 2>/dev/null || true
+fi
+
+if launchctl list | grep -q "com.rpccluster.beacon"; then
+    echo "Stopping existing beacon daemon..."
+    launchctl bootout system/com.rpccluster.beacon 2>/dev/null || true
+fi
+
+# Wait for services to stop
+sleep 1
+
+# Remove old plist files if they exist with different content
+# (pkgbuild will handle the new files)
+
+echo "Pre-install cleanup complete."
+exit 0

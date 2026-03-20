@@ -1,0 +1,16 @@
+{
+  "name": "rpc-worker-beacon",
+  "version": "0.1.0",
+  "description": "Worker beacon for RPC Cluster - broadcasts worker presence on LAN",
+  "main": "beacon.js",
+  "scripts": {
+    "start": "node beacon.js",
+    "build": "./build.sh",
+    "build:sea": "node --experimental-sea-config sea-config.json"
+  },
+  "author": "rpc-cluster",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

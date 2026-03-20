@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>RPC Cluster Worker</title>
+    <organization>com.rpccluster</organization>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    
+    <!-- Minimum OS Version -->
+    <os-version min="13.0"/>
+    
+    <!-- Welcome, License, Readme -->
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <license file="license.txt" mime-type="text/plain"/>
+    <readme file="readme.html" mime-type="text/html"/>
+    
+    <!-- Options -->
+    <options customize="never" require-scripts="true" hostArchitectures="arm64,x86_64"/>
+    
+    <!-- Background image (optional) -->
+    <!-- <background file="background.png" alignment="bottomleft" scaling="none"/> -->
+    
+    <!-- Choices -->
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.rpccluster.worker"/>
+        </line>
+    </choices-outline>
+    
+    <choice id="default"/>
+    
+    <choice id="com.rpccluster.worker" visible="true" title="RPC Cluster Worker" description="Installs the llama.cpp RPC server and discovery beacon as system services.">
+        <pkg-ref id="com.rpccluster.worker"/>
+    </choice>
+    
+    <!-- Package reference -->
+    <pkg-ref id="com.rpccluster.worker" version="0.1.0" onConclusion="none">rpc-cluster-worker-component.pkg</pkg-ref>
+    
+    <!-- Installation check script -->
+    <installation-check script="installationCheck()"/>
+    
+    <script>
+    function installationCheck() {
+        // Check if running on macOS 13 (Ventura) or later
+        if (system.compareVersions(system.version.ProductVersion, '13.0') < 0) {
+            my.result.title = 'Unsupported macOS Version';
+            my.result.message = 'RPC Cluster Worker requires macOS 13 (Ventura) or later.';
+            my.result.type = 'Fatal';
+            return false;
+        }
+        return true;
+    }
+    </script>
+</installer-gui-script>

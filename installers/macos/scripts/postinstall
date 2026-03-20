@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# RPC Cluster Worker - Post-install Script
+# Loads and starts the LaunchDaemons
+
+set -e
+
+echo "RPC Cluster Worker: Post-install configuration..."
+
+# Ensure cache directory exists and has correct permissions
+mkdir -p /var/cache/llama-rpc
+chmod 755 /var/cache/llama-rpc
+
+# Ensure log files exist and are writable
+touch /var/log/rpc-server.log
+touch /var/log/rpc-beacon.log
+chmod 644 /var/log/rpc-server.log
+chmod 644 /var/log/rpc-beacon.log
+
+# Set correct permissions on LaunchDaemon plists
+chmod 644 /Library/LaunchDaemons/com.rpccluster.rpcserver.plist
+chmod 644 /Library/LaunchDaemons/com.rpccluster.beacon.plist
+chown root:wheel /Library/LaunchDaemons/com.rpccluster.rpcserver.plist
+chown root:wheel /Library/LaunchDaemons/com.rpccluster.beacon.plist
+
+# Load and start the daemons
+echo "Loading RPC server daemon..."
+launchctl bootstrap system /Library/LaunchDaemons/com.rpccluster.rpcserver.plist || {
+    echo "Warning: Failed to bootstrap RPC server. It may already be loaded."
+}
+
+echo "Loading beacon daemon..."
+launchctl bootstrap system /Library/LaunchDaemons/com.rpccluster.beacon.plist || {
+    echo "Warning: Failed to bootstrap beacon. It may already be loaded."
+}
+
+# Verify services are running
+sleep 2
+
+if launchctl list | grep -q "com.rpccluster.rpcserver"; then
+    echo "RPC server daemon is running."
+else
+    echo "Warning: RPC server daemon may not have started. Check /var/log/rpc-server.log"
+fi
+
+if launchctl list | grep -q "com.rpccluster.beacon"; then
+    echo "Beacon daemon is running."
+else
+    echo "Warning: Beacon daemon may not have started. Check /var/log/rpc-beacon.log"
+fi
+
+# Note about firewall
+echo ""
+echo "Note: macOS Application Firewall may prompt to allow incoming connections."
+echo "If prompted, click 'Allow' to enable network discovery."
+echo ""
+echo "To manually allow through firewall (if needed):"
+echo "  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /usr/local/bin/rpc-server"
+echo "  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /usr/local/bin/rpc-worker-beacon"
+echo ""
+
+echo "Post-install configuration complete."
+exit 0

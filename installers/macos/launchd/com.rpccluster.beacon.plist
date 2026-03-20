@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.rpccluster.beacon</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/rpc-worker-beacon</string>
+    </array>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <true/>
+    
+    <key>StandardOutPath</key>
+    <string>/var/log/rpc-beacon.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/var/log/rpc-beacon.log</string>
+    
+    <!-- Restart on crash with a delay -->
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,190 @@
+name: Build macOS Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'installers/macos/**'
+      - 'worker-beacon/**'
+      - '.github/workflows/build-macos.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'installers/macos/**'
+      - 'worker-beacon/**'
+  workflow_dispatch:
+    inputs:
+      sign_package:
+        description: 'Sign the package (requires APPLE_SIGNING_IDENTITY secret)'
+        required: false
+        default: 'false'
+        type: boolean
+      llama_cpp_variant:
+        description: 'llama.cpp release variant'
+        required: false
+        default: 'cpu'
+        type: choice
+        options:
+          - cpu
+          - metal
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          npm install -g postject
+          echo "Node.js version: $(node -v)"
+          echo "npm version: $(npm -v)"
+
+      - name: Download llama.cpp rpc-server
+        run: |
+          set -e
+          
+          echo "Fetching latest llama.cpp release..."
+          RELEASE_INFO=$(curl -s https://api.github.com/repos/ggml-org/llama.cpp/releases/latest)
+          RELEASE_TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+          echo "Latest release: $RELEASE_TAG"
+          
+          # Determine which variant to download
+          VARIANT="${{ github.event.inputs.llama_cpp_variant || 'cpu' }}"
+          ARCH=$(uname -m)
+          
+          if [ "$ARCH" = "arm64" ]; then
+            if [ "$VARIANT" = "metal" ]; then
+              PATTERN="macos-arm64"
+            else
+              PATTERN="macos-arm64"
+            fi
+          else
+            PATTERN="macos-x64"
+          fi
+          
+          echo "Looking for asset matching pattern: $PATTERN"
+          
+          # Find the download URL
+          DOWNLOAD_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | contains(\"$PATTERN\") and contains(\".zip\") and (contains(\"sha256\") | not)) | .browser_download_url" | head -1)
+          
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            echo "Error: Could not find macOS binary in release"
+            echo "Available assets:"
+            echo "$RELEASE_INFO" | jq -r '.assets[].name'
+            exit 1
+          fi
+          
+          echo "Downloading: $DOWNLOAD_URL"
+          
+          # Download and extract
+          mkdir -p vendor/macos
+          curl -L -o llama-release.zip "$DOWNLOAD_URL"
+          unzip -o llama-release.zip -d llama-extract
+          
+          # Find and copy rpc-server
+          RPC_SERVER=$(find llama-extract -name "rpc-server" -type f | head -1)
+          if [ -z "$RPC_SERVER" ]; then
+            echo "Error: rpc-server not found in archive"
+            echo "Contents:"
+            find llama-extract -type f
+            exit 1
+          fi
+          
+          cp "$RPC_SERVER" vendor/macos/rpc-server
+          chmod +x vendor/macos/rpc-server
+          
+          echo "rpc-server extracted to vendor/macos/"
+          ls -la vendor/macos/
+          
+          # Cleanup
+          rm -rf llama-release.zip llama-extract
+
+      - name: Build worker beacon
+        run: |
+          cd worker-beacon
+          
+          echo "Generating SEA blob..."
+          node --experimental-sea-config sea-config.json
+          
+          echo "Creating executable..."
+          mkdir -p dist
+          cp "$(which node)" dist/rpc-worker-beacon-macos
+          
+          echo "Injecting SEA blob..."
+          npx postject dist/rpc-worker-beacon-macos NODE_SEA_BLOB sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+            --macho-segment-name NODE_SEA
+          
+          echo "Removing code signature..."
+          codesign --remove-signature dist/rpc-worker-beacon-macos || true
+          
+          echo "Ad-hoc signing..."
+          codesign -s - dist/rpc-worker-beacon-macos || true
+          
+          chmod +x dist/rpc-worker-beacon-macos
+          
+          echo "Beacon built:"
+          ls -la dist/
+          
+          # Cleanup
+          rm -f sea-prep.blob
+
+      - name: Build macOS installer
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ github.event.inputs.sign_package == 'true' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+        run: |
+          chmod +x installers/macos/build-macos-installer.sh
+          chmod +x installers/macos/scripts/preinstall
+          chmod +x installers/macos/scripts/postinstall
+          ./installers/macos/build-macos-installer.sh
+
+      - name: Verify installer
+        run: |
+          echo "Installer contents:"
+          ls -la dist/
+          
+          if [ -f dist/rpc-cluster-worker-*.pkg ]; then
+            PKG_FILE=$(ls dist/rpc-cluster-worker-*.pkg)
+            echo "Package info:"
+            pkgutil --payload-files "$PKG_FILE" | head -20
+          fi
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpc-cluster-worker-macos-installer
+          path: dist/rpc-cluster-worker-*.pkg
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload worker beacon (standalone)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpc-worker-beacon-macos
+          path: worker-beacon/dist/rpc-worker-beacon-macos
+          retention-days: 30
+
+  # Build for both architectures if needed
+  build-universal:
+    runs-on: macos-latest
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    
+    steps:
+      - name: Note about universal binary
+        run: |
+          echo "To create a universal (arm64 + x86_64) binary:"
+          echo "1. Run this workflow on both macos-14 (arm64) and macos-13 (x86_64)"
+          echo "2. Download both beacon artifacts"
+          echo "3. Use lipo to combine:"
+          echo "   lipo -create -output rpc-worker-beacon-macos-universal \\"
+          echo "     rpc-worker-beacon-macos-arm64 \\"
+          echo "     rpc-worker-beacon-macos-x64"

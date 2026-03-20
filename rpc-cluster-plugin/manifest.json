@@ -1,0 +1,55 @@
+{
+  "name": "rpc-cluster",
+  "displayName": "RPC Cluster",
+  "description": "Distributed llama.cpp inference — auto-discovers workers on LAN",
+  "version": "0.1.0",
+  "author": "rpc-cluster",
+  "license": "MIT",
+  "engines": {
+    "lmstudio": ">=0.3.0"
+  },
+  "entryPoints": {
+    "generator": "./dist/generator.js"
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "modelPath": {
+        "type": "string",
+        "title": "Model Path",
+        "description": "Absolute path to the .gguf file on the host machine"
+      },
+      "discoveryTimeoutMs": {
+        "type": "number",
+        "title": "Discovery Timeout (ms)",
+        "description": "How long to scan for workers on the network",
+        "default": 4000
+      },
+      "nGpuLayers": {
+        "type": "number",
+        "title": "GPU Layers",
+        "description": "Number of layers to offload to GPU (-ngl flag)",
+        "default": 99
+      },
+      "maxTokens": {
+        "type": "number",
+        "title": "Max Tokens",
+        "description": "Maximum tokens to generate",
+        "default": 2048
+      },
+      "temperature": {
+        "type": "number",
+        "title": "Temperature",
+        "description": "Sampling temperature",
+        "default": 0.7
+      },
+      "discoveredWorkers": {
+        "type": "string",
+        "title": "Discovered Workers",
+        "description": "List of discovered workers (read-only, updated at runtime)",
+        "readOnly": true
+      }
+    },
+    "required": ["modelPath"]
+  }
+}
