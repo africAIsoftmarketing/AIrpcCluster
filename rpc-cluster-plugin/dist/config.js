@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_CONFIG = exports.ConfigSchema = exports.WorkerSchema = void 0;
+exports.CONFIG_PATH = exports.DEFAULT_CONFIG = exports.ConfigSchema = exports.WorkerSchema = void 0;
 exports.getConfigPath = getConfigPath;
 exports.loadConfig = loadConfig;
 exports.saveConfig = saveConfig;
@@ -41,6 +41,7 @@ exports.formatDiscoveredWorkers = formatDiscoveredWorkers;
 const zod_1 = require("zod");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const os = __importStar(require("os"));
 /**
  * Worker configuration schema
  */
@@ -83,18 +84,21 @@ const CONFIG_FILE_NAME = 'config.json';
  * Get the configuration file path based on platform
  */
 function getConfigPath() {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
     if (process.platform === 'darwin') {
-        return path.join(homeDir, 'Library', 'Application Support', 'rpc-cluster', CONFIG_FILE_NAME);
+        return path.join(os.homedir(), 'Library', 'Application Support', 'rpc-cluster', CONFIG_FILE_NAME);
     }
     else if (process.platform === 'win32') {
-        const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+        const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
         return path.join(appData, 'rpc-cluster', CONFIG_FILE_NAME);
     }
     else {
-        return path.join(homeDir, '.config', 'rpc-cluster', CONFIG_FILE_NAME);
+        return path.join(os.homedir(), '.config', 'rpc-cluster', CONFIG_FILE_NAME);
     }
 }
+/**
+ * Exported config path for external use
+ */
+exports.CONFIG_PATH = getConfigPath();
 /**
  * Load configuration from file
  * @returns Parsed and validated configuration

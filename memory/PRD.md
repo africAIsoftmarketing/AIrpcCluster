@@ -78,9 +78,10 @@ Config file location:
 - Windows: `%APPDATA%\rpc-cluster\config.json`
 
 ## Test Status
-- 40 tests passing
-- Discovery tests: 10 passed
-- Config tests: 16 passed
+- 54 tests passing
+- Discovery tests: 12 passed
+- Config tests: 17 passed
+- Generator tests: 11 passed
 - Utils tests: 14 passed
 
 ## Remaining / Future Work

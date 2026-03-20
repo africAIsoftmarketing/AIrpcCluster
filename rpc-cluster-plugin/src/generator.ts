@@ -29,6 +29,7 @@ const LLAMA_SERVER_STARTUP_TIMEOUT = 30000;
  */
 let llamaServerProcess: ChildProcess | null = null;
 let currentRpcConfig: string | null = null;
+let isServerStarting = false;
 
 /**
  * Cleanup handler for process exit
@@ -71,6 +72,14 @@ async function spawnLlamaServer(
     currentRpcConfig = null;
   }
   
+  // Guard against race conditions when generate() is called rapidly
+  if (isServerStarting) {
+    ctl.statusUpdate('Waiting for server to start...');
+    // Wait for the existing startup to complete
+    await waitForPort(LLAMA_SERVER_PORT, LLAMA_SERVER_STARTUP_TIMEOUT);
+    return;
+  }
+  
   // Kill existing process if config changed
   if (llamaServerProcess) {
     ctl.statusUpdate('Worker configuration changed, restarting llama-server...');
@@ -82,11 +91,11 @@ async function spawnLlamaServer(
   // Check if llama-server is in PATH
   const hasLlamaServer = await commandExists('llama-server');
   if (!hasLlamaServer) {
-    throw new Error(
-      'llama-server not found in PATH. Please install llama.cpp and ensure ' +
+    const errorMsg = 'llama-server not found in PATH. Please install llama.cpp and ensure ' +
       'llama-server is accessible from your system PATH. Visit ' +
-      'https://github.com/ggerganov/llama.cpp for installation instructions.'
-    );
+      'https://github.com/ggerganov/llama.cpp for installation instructions.';
+    ctl.statusUpdate(errorMsg);
+    throw new Error(errorMsg);
   }
   
   // Build command arguments
@@ -104,11 +113,24 @@ async function spawnLlamaServer(
     ctl.statusUpdate('Starting llama-server in local mode (no workers found)...');
   }
   
+  isServerStarting = true;
+  
   // Spawn the process
-  llamaServerProcess = spawn('llama-server', args, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: false
-  });
+  try {
+    llamaServerProcess = spawn('llama-server', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false
+    });
+  } catch (err) {
+    isServerStarting = false;
+    const error = err as NodeJS.ErrnoException;
+    if (error.code === 'ENOENT') {
+      const errorMsg = 'llama-server not found. Please ensure llama-server is installed and in your PATH.';
+      ctl.statusUpdate(errorMsg);
+      throw new Error(errorMsg);
+    }
+    throw err;
+  }
   
   currentRpcConfig = rpcArg;
   
@@ -123,22 +145,30 @@ async function spawnLlamaServer(
   
   llamaServerProcess.on('error', (err) => {
     console.error('[generator] Failed to start llama-server:', err);
+    const error = err as NodeJS.ErrnoException;
+    if (error.code === 'ENOENT') {
+      ctl.statusUpdate('llama-server not found. Please ensure it is installed and in your PATH.');
+    }
     llamaServerProcess = null;
     currentRpcConfig = null;
+    isServerStarting = false;
   });
   
   llamaServerProcess.on('exit', (code, signal) => {
     console.log(`[generator] llama-server exited with code ${code}, signal ${signal}`);
     llamaServerProcess = null;
     currentRpcConfig = null;
+    isServerStarting = false;
   });
   
   // Wait for the server to be ready
   ctl.statusUpdate('Waiting for llama-server to initialize...');
   try {
     await waitForPort(LLAMA_SERVER_PORT, LLAMA_SERVER_STARTUP_TIMEOUT);
+    isServerStarting = false;
     ctl.statusUpdate('llama-server ready');
   } catch (err) {
+    isServerStarting = false;
     if (llamaServerProcess) {
       llamaServerProcess.kill('SIGTERM');
       llamaServerProcess = null;

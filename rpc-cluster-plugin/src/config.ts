@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 /**
  * Worker configuration schema
@@ -52,17 +53,20 @@ const CONFIG_FILE_NAME = 'config.json';
  * Get the configuration file path based on platform
  */
 export function getConfigPath(): string {
-  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-  
   if (process.platform === 'darwin') {
-    return path.join(homeDir, 'Library', 'Application Support', 'rpc-cluster', CONFIG_FILE_NAME);
+    return path.join(os.homedir(), 'Library', 'Application Support', 'rpc-cluster', CONFIG_FILE_NAME);
   } else if (process.platform === 'win32') {
-    const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+    const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
     return path.join(appData, 'rpc-cluster', CONFIG_FILE_NAME);
   } else {
-    return path.join(homeDir, '.config', 'rpc-cluster', CONFIG_FILE_NAME);
+    return path.join(os.homedir(), '.config', 'rpc-cluster', CONFIG_FILE_NAME);
   }
 }
+
+/**
+ * Exported config path for external use
+ */
+export const CONFIG_PATH = getConfigPath();
 
 /**
  * Load configuration from file

@@ -213,6 +213,65 @@ describe('discoverWorkers', () => {
     const workers = await promise;
     expect(workers).toEqual([]);
   });
+  
+  it('should handle end-to-end discovery scenario correctly', async () => {
+    // Test the exact sequence from the spec:
+    // t=0ms    discoverWorkers(4000) called
+    // t=500ms  beacon packet arrives
+    // t=800ms  duplicate beacon arrives - must be deduplicated
+    // t=4000ms timeout fires, socket closes
+    
+    const promise = discoverWorkers(4000);
+    
+    mockSocket.emit('listening');
+    
+    // t=500ms - First beacon arrives
+    await vi.advanceTimersByTimeAsync(500);
+    const beacon = JSON.stringify({
+      hostname: 'Laptop-B',
+      ip: '192.168.1.12',
+      port: 50052,
+      vramGB: 8,
+      platform: 'win32'
+    });
+    mockSocket.emit('message', Buffer.from(beacon), { address: '192.168.1.12' });
+    
+    // t=800ms - Duplicate beacon arrives (same IP)
+    await vi.advanceTimersByTimeAsync(300);
+    mockSocket.emit('message', Buffer.from(beacon), { address: '192.168.1.12' });
+    
+    // t=4000ms - Timeout fires
+    await vi.advanceTimersByTimeAsync(3200);
+    
+    const workers = await promise;
+    
+    // Verify deduplication - should have exactly 1 worker
+    expect(workers).toHaveLength(1);
+    expect(workers[0]).toEqual({
+      hostname: 'Laptop-B',
+      ip: '192.168.1.12',
+      port: 50052,
+      vramGB: 8,
+      platform: 'win32'
+    });
+    
+    // Verify socket was closed
+    expect(mockSocket.close).toHaveBeenCalled();
+  });
+  
+  it('should close socket after timeout even when no workers found', async () => {
+    const promise = discoverWorkers(1000);
+    
+    mockSocket.emit('listening');
+    
+    // No beacons arrive, just wait for timeout
+    await vi.advanceTimersByTimeAsync(1100);
+    
+    const workers = await promise;
+    
+    expect(workers).toEqual([]);
+    expect(mockSocket.close).toHaveBeenCalled();
+  });
 });
 
 describe('buildRpcArgument', () => {

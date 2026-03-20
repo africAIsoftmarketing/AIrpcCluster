@@ -5,7 +5,7 @@ import * as path from 'path';
 // Mock fs module
 vi.mock('fs');
 
-import { loadConfig, saveConfig, formatDiscoveredWorkers, getConfigPath, DEFAULT_CONFIG } from '../config';
+import { loadConfig, saveConfig, formatDiscoveredWorkers, getConfigPath, CONFIG_PATH, DEFAULT_CONFIG } from '../config';
 
 describe('loadConfig', () => {
   beforeEach(() => {
@@ -200,6 +200,7 @@ describe('getConfigPath', () => {
     
     const configPath = getConfigPath();
     expect(configPath).toContain('Library/Application Support/rpc-cluster');
+    expect(configPath).toMatch(/config\.json$/);
   });
   
   it('should return Windows path on win32', () => {
@@ -208,6 +209,7 @@ describe('getConfigPath', () => {
     
     const configPath = getConfigPath();
     expect(configPath).toContain('rpc-cluster');
+    expect(configPath).toMatch(/config\.json$/);
   });
   
   it('should return Linux path on other platforms', () => {
@@ -216,5 +218,13 @@ describe('getConfigPath', () => {
     
     const configPath = getConfigPath();
     expect(configPath).toContain('.config/rpc-cluster');
+    expect(configPath).toMatch(/config\.json$/);
+  });
+});
+
+describe('CONFIG_PATH', () => {
+  it('should be a string ending with config.json', () => {
+    expect(typeof CONFIG_PATH).toBe('string');
+    expect(CONFIG_PATH).toMatch(/config\.json$/);
   });
 });

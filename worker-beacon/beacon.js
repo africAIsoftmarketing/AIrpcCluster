@@ -198,17 +198,41 @@ function startBeacon() {
   console.log('[beacon] RPC Cluster Worker Beacon starting...');
   
   const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  let intervalId = null;
+  
+  // Store socket reference for cleanup
+  const cleanup = () => {
+    console.log('[beacon] Cleaning up...');
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    try {
+      socket.close();
+    } catch (e) {
+      // Ignore close errors
+    }
+  };
+  
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('[beacon] Received SIGTERM, shutting down...');
+    cleanup();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', () => {
+    console.log('[beacon] Received SIGINT, shutting down...');
+    cleanup();
+    process.exit(0);
+  });
   
   socket.on('error', (err) => {
     console.error('[beacon] Socket error:', err.message);
     // Attempt to recover
     setTimeout(() => {
       console.log('[beacon] Attempting to restart beacon...');
-      try {
-        socket.close();
-      } catch (e) {
-        // Ignore close errors
-      }
+      cleanup();
       startBeacon();
     }, 5000);
   });
@@ -232,7 +256,7 @@ function startBeacon() {
     sendBeacon();
     
     // Schedule periodic broadcasts
-    setInterval(sendBeacon, BROADCAST_INTERVAL_MS);
+    intervalId = setInterval(sendBeacon, BROADCAST_INTERVAL_MS);
   });
   
   function sendBeacon() {
@@ -246,17 +270,6 @@ function startBeacon() {
     });
   }
 }
-
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('[beacon] Received SIGTERM, shutting down...');
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('[beacon] Received SIGINT, shutting down...');
-  process.exit(0);
-});
 
 // Start the beacon
 startBeacon();

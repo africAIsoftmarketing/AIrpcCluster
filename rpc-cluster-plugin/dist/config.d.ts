@@ -90,6 +90,10 @@ export declare const DEFAULT_CONFIG: Config;
  */
 export declare function getConfigPath(): string;
 /**
+ * Exported config path for external use
+ */
+export declare const CONFIG_PATH: string;
+/**
  * Load configuration from file
  * @returns Parsed and validated configuration
  * @throws Error if file cannot be read or parsed
