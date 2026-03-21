@@ -9,6 +9,9 @@
     "build:mac": "electron-builder --mac dmg",
     "build:win": "electron-builder --win nsis"
   },
+  "dependencies": {
+    "adm-zip": "^0.5.10"
+  },
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.0.0"

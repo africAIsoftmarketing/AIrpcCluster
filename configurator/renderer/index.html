@@ -592,6 +592,102 @@
       </div>
     </header>
 
+    <!-- Step 0: Check host requirements -->
+    <div class="card" id="step0-card">
+      <div class="card-header">
+        <div class="step-badge" id="step0-badge">0</div>
+        <div>
+          <h2 class="card-title">Check host requirements</h2>
+          <p class="card-subtitle">Detect GPU and verify llama-server is installed.</p>
+        </div>
+      </div>
+
+      <!-- State A: checking -->
+      <div id="hw-checking" style="display: flex; align-items: center; gap: 10px; padding: 12px 0;">
+        <div class="spinner"></div>
+        <span style="font-size: 14px; color: #ccc;">Detecting host hardware…</span>
+      </div>
+
+      <!-- State B: llama-server found -->
+      <div id="hw-found" class="hidden" style="border: 1px solid #4caf50; background: #0a1f0a; border-radius: 8px; padding: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: #4caf50; margin-bottom: 8px;">
+          <span style="font-size: 18px;">&#10003;</span> llama-server found
+        </div>
+        <div id="hw-found-path" style="font-size: 13px; color: #aaa;"></div>
+        <div id="hw-found-gpu" style="font-size: 13px; color: #aaa;"></div>
+        <p style="font-size: 12px; color: #888; margin-top: 8px;">Ready to configure your cluster.</p>
+      </div>
+
+      <!-- State C: not found — show hardware + variant selector -->
+      <div id="hw-not-found" class="hidden">
+        <div style="background: #1e1e2e; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+          <div style="font-size: 14px; font-weight: 500; color: #e8e8e8; margin-bottom: 8px;">Detected hardware</div>
+          <div id="hw-gpu-name" class="server-detail-row"></div>
+          <div id="hw-gpu-vram" class="server-detail-row"></div>
+          <div id="hw-platform" class="server-detail-row"></div>
+        </div>
+
+        <div style="border: 1px solid #7c6df0; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+          <div id="hw-recommended" style="font-size: 14px; font-weight: 500; color: #7c6df0; margin-bottom: 4px;"></div>
+          <div id="hw-recommended-desc" style="font-size: 13px; color: #aaa;"></div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 13px; color: #888; margin-bottom: 8px;">Select variant:</div>
+          <div id="variant-list"></div>
+        </div>
+
+        <button id="get-download-btn" class="btn btn-primary btn-full">Get download link</button>
+      </div>
+
+      <!-- State D: download info ready -->
+      <div id="hw-download" class="hidden" style="background: #1e1e2e; border: 1px solid #333; border-radius: 8px; padding: 16px;">
+        <div id="hw-dl-version" style="font-size: 15px; font-weight: 500; color: #e8e8e8; margin-bottom: 4px;"></div>
+        <div id="hw-dl-file" style="font-size: 13px; color: #aaa;"></div>
+        <div id="hw-dl-size" style="font-size: 13px; color: #aaa; margin-bottom: 12px;"></div>
+
+        <button id="install-auto-btn" class="btn btn-primary btn-full">Install automatically</button>
+        <div style="text-align: center; margin-top: 10px;">
+          <a id="download-manual-link" href="#" style="color: #7c6df0; font-size: 13px; cursor: pointer;">Download manually &#8594;</a>
+        </div>
+        <div style="font-size: 12px; color: #666; margin-top: 10px; line-height: 1.6;">
+          Manual install:<br>
+          1. Extract the zip<br>
+          2. Copy llama-server to <span id="hw-install-dir-hint"></span><br>
+          3. Add it to your system PATH<br>
+          4. Restart the Configurator
+        </div>
+      </div>
+
+      <!-- State E: installing -->
+      <div id="hw-installing" class="hidden" style="padding: 12px 0;">
+        <div style="background: #333; border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 8px;">
+          <div id="install-progress-bar" style="background: #7c6df0; height: 100%; width: 0%; transition: width 0.3s;"></div>
+        </div>
+        <div id="install-progress-text" style="font-size: 13px; color: #aaa;"></div>
+      </div>
+
+      <!-- State F: complete -->
+      <div id="hw-complete" class="hidden" style="border: 1px solid #4caf50; background: #0a1f0a; border-radius: 8px; padding: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: #4caf50; margin-bottom: 8px;">
+          <span style="font-size: 18px;">&#10003;</span> llama-server installed successfully
+        </div>
+        <div id="hw-install-location" style="font-size: 13px; color: #aaa; margin-bottom: 8px;"></div>
+        <p style="font-size: 12px; color: #f0ad4e; margin-bottom: 12px;">Restart the Configurator to apply PATH changes.</p>
+        <button id="restart-btn" class="btn btn-primary btn-full">Restart Configurator</button>
+      </div>
+
+      <!-- State G: failed -->
+      <div id="hw-failed" class="hidden" style="border: 1px solid #f44336; background: #1f0a0a; border-radius: 8px; padding: 16px;">
+        <div style="color: #f44336; font-weight: 500; margin-bottom: 4px;">Installation failed</div>
+        <div id="hw-error-msg" style="font-size: 13px; color: #ccc; margin-bottom: 12px;"></div>
+        <div style="display: flex; gap: 8px;">
+          <button id="hw-try-again-btn" class="btn btn-secondary">Try again</button>
+          <a id="hw-manual-fallback" href="#" style="color: #7c6df0; font-size: 13px; display: flex; align-items: center; cursor: pointer;">Download manually &#8594;</a>
+        </div>
+      </div>
+    </div>
+
     <!-- Step 1: Scan for workers -->
     <div class="card">
       <div class="card-header">
@@ -894,6 +990,144 @@
     // Sanitize model path — strip surrounding quotes
     function sanitizeModelPath(p) {
       return p.trim().replace(/^["']|["']$/g, '');
+    }
+
+    // llama.cpp variant labels and descriptions
+    const VARIANT_LABELS = {
+      'cpu':         'CPU only',
+      'cuda-cu11.7': 'CUDA 11.7 (NVIDIA)',
+      'cuda-cu12.4': 'CUDA 12.4 (NVIDIA)',
+      'vulkan':      'Vulkan (AMD / Intel GPU)',
+      'metal':       'Metal (Apple Silicon)',
+      'hip':         'HIP/ROCm (AMD — Linux)',
+    };
+    const VARIANT_DESCRIPTIONS = {
+      'cpu':         'Works on any machine. Slower but universally compatible.',
+      'cuda-cu11.7': 'For older NVIDIA GPUs (GTX 10/16 series, RTX 20 series).',
+      'cuda-cu12.4': 'For modern NVIDIA GPUs. Requires driver 525+.',
+      'vulkan':      'GPU acceleration via Vulkan. Works on AMD and Intel GPUs.',
+      'metal':       'Native Apple Silicon acceleration. Best performance on Mac.',
+      'hip':         'AMD GPU acceleration on Linux via ROCm.',
+    };
+    const PLATFORM_VARIANTS = {
+      'win32':  ['cuda-cu12.4', 'cuda-cu11.7', 'vulkan', 'cpu'],
+      'darwin': ['metal', 'cpu'],
+      'linux':  ['cuda-cu12.4', 'vulkan', 'cpu'],
+    };
+
+    let hwState = { variant: 'cpu', downloadUrl: null };
+
+    // Step 0: show specific state, hide others
+    function showHwState(name) {
+      ['hw-checking', 'hw-found', 'hw-not-found', 'hw-download', 'hw-installing', 'hw-complete', 'hw-failed']
+        .forEach(id => document.getElementById(id).classList.add('hidden'));
+      if (name) document.getElementById(name).classList.remove('hidden');
+    }
+
+    async function detectHostHardware() {
+      showHwState('hw-checking');
+      try {
+        const hw = await window.rpcCluster.detectHostHardware();
+
+        if (hw.llamaServerFound) {
+          document.getElementById('hw-found-path').textContent = 'Path: ' + hw.llamaServerPath;
+          document.getElementById('hw-found-gpu').textContent = 'GPU: ' + (hw.gpu.name || 'CPU only');
+          document.getElementById('step0-badge').style.background = '#4caf50';
+          showHwState('hw-found');
+          return;
+        }
+
+        // Not found — show variant selector
+        hwState.variant = hw.recommendedVariant;
+        document.getElementById('hw-gpu-name').textContent = 'GPU: ' + (hw.gpu.name || 'No dedicated GPU detected');
+        document.getElementById('hw-gpu-vram').textContent = 'VRAM: ' + (hw.gpu.vramGB > 0 ? hw.gpu.vramGB + ' GB' : 'N/A');
+        const platLabels = { win32: 'Windows', darwin: 'macOS', linux: 'Linux' };
+        document.getElementById('hw-platform').textContent = 'Platform: ' + (platLabels[hw.platform] || hw.platform);
+
+        document.getElementById('hw-recommended').textContent = 'Recommended: ' + (VARIANT_LABELS[hw.recommendedVariant] || hw.recommendedVariant);
+        document.getElementById('hw-recommended-desc').textContent = VARIANT_DESCRIPTIONS[hw.recommendedVariant] || '';
+
+        const installDir = hw.platform === 'win32' ? 'C:\\llama-server\\' : '/usr/local/bin/';
+        document.getElementById('hw-install-dir-hint').textContent = installDir;
+
+        // Build variant radio list
+        const variants = PLATFORM_VARIANTS[hw.platform] || PLATFORM_VARIANTS['linux'];
+        const listEl = document.getElementById('variant-list');
+        listEl.innerHTML = '';
+        variants.forEach(v => {
+          const id = 'variant-' + v;
+          const label = document.createElement('label');
+          label.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 4px; background: #1e1e2e; border-radius: 6px; cursor: pointer; font-size: 13px; color: #ccc;';
+          label.innerHTML = '<input type="radio" name="variant" value="' + v + '"' +
+            (v === hw.recommendedVariant ? ' checked' : '') + '> ' + VARIANT_LABELS[v];
+          label.querySelector('input').addEventListener('change', () => { hwState.variant = v; });
+          listEl.appendChild(label);
+        });
+
+        showHwState('hw-not-found');
+      } catch (err) {
+        showHwState('hw-not-found');
+      }
+    }
+
+    async function getDownloadLink() {
+      const btn = document.getElementById('get-download-btn');
+      btn.disabled = true;
+      btn.textContent = 'Fetching latest release…';
+
+      try {
+        const result = await window.rpcCluster.getLlamaDownloadUrl(hwState.variant);
+        if (result.ok) {
+          hwState.downloadUrl = result.url;
+          document.getElementById('hw-dl-version').textContent = 'llama.cpp ' + result.version;
+          document.getElementById('hw-dl-file').textContent = 'File: ' + result.filename;
+          document.getElementById('hw-dl-size').textContent = 'Size: ' + result.sizeMB + ' MB';
+          document.getElementById('download-manual-link').dataset.url = result.url;
+          showHwState('hw-download');
+        } else {
+          btn.textContent = 'Error: ' + result.error;
+          btn.disabled = false;
+          setTimeout(() => { btn.textContent = 'Get download link'; }, 5000);
+        }
+      } catch (err) {
+        btn.textContent = 'Error: ' + err.message;
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = 'Get download link'; }, 5000);
+      }
+    }
+
+    async function installAutomatically() {
+      if (!hwState.downloadUrl) return;
+      showHwState('hw-installing');
+
+      window.rpcCluster.onInstallProgress((data) => {
+        const bar = document.getElementById('install-progress-bar');
+        const text = document.getElementById('install-progress-text');
+        bar.style.width = (data.percent || 0) + '%';
+        if (data.stage === 'downloading') {
+          text.textContent = 'Downloading llama-server… (' + data.downloaded + ' MB / ' + data.total + ' MB)';
+        } else if (data.stage === 'extracting') {
+          text.textContent = 'Extracting archive…';
+        } else if (data.stage === 'configuring') {
+          text.textContent = 'Configuring PATH…';
+        } else if (data.stage === 'complete') {
+          text.textContent = 'Complete!';
+        }
+      });
+
+      try {
+        const result = await window.rpcCluster.installLlamaServer(hwState.downloadUrl);
+        if (result.ok) {
+          document.getElementById('hw-install-location').textContent = 'Location: ' + result.binaryPath;
+          showHwState('hw-complete');
+        } else {
+          document.getElementById('hw-error-msg').textContent = result.error;
+          showHwState('hw-failed');
+        }
+      } catch (err) {
+        document.getElementById('hw-error-msg').textContent = err.message;
+        showHwState('hw-failed');
+      }
     }
 
     // Build config object
@@ -1411,10 +1645,34 @@
       } catch (err) {
         // Ignore — server status check is non-critical
       }
+
+      // Step 0: auto-detect host hardware on load
+      detectHostHardware();
       
       // Event listeners
       document.getElementById('scan-btn').addEventListener('click', scanWorkers);
       document.getElementById('rescan-btn').addEventListener('click', scanWorkers);
+
+      // Step 0: hardware detection
+      document.getElementById('get-download-btn').addEventListener('click', getDownloadLink);
+      document.getElementById('install-auto-btn').addEventListener('click', installAutomatically);
+      document.getElementById('download-manual-link').addEventListener('click', (e) => {
+        e.preventDefault();
+        const url = e.target.dataset.url || 'https://github.com/ggml-org/llama.cpp/releases/latest';
+        window.rpcCluster.openExternalUrl(url);
+      });
+      document.getElementById('restart-btn').addEventListener('click', () => {
+        window.rpcCluster.restartApp();
+      });
+      document.getElementById('hw-try-again-btn').addEventListener('click', () => {
+        showHwState('hw-not-found');
+        document.getElementById('get-download-btn').disabled = false;
+        document.getElementById('get-download-btn').textContent = 'Get download link';
+      });
+      document.getElementById('hw-manual-fallback').addEventListener('click', (e) => {
+        e.preventDefault();
+        window.rpcCluster.openExternalUrl('https://github.com/ggml-org/llama.cpp/releases/latest');
+      });
 
       // Manual worker entry
       document.getElementById('add-manual-worker-btn').addEventListener('click', () => {

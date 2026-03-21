@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const net = require('net');
 const { discoverWorkers, CONFIG_PATH } = require('./shared/discovery');
 
@@ -365,8 +365,27 @@ ipcMain.handle('start-inference-server', async () => {
       args.push('--rpc', enabledWorkers.map(w => `${w.ip}:${w.port}`).join(','));
     }
 
+    // Resolve llama-server binary path
+    let llamaBinary = 'llama-server';
     try {
-      inferenceServerProcess = spawn('llama-server', args, {
+      const cmd = process.platform === 'win32' ? 'where llama-server' : 'which llama-server';
+      execSync(cmd, { encoding: 'utf-8' });
+    } catch (e) {
+      const knownPath = process.platform === 'win32'
+        ? 'C:\\llama-server\\llama-server.exe'
+        : '/usr/local/bin/llama-server';
+      if (fs.existsSync(knownPath)) {
+        llamaBinary = knownPath;
+      } else {
+        return {
+          ok: false,
+          error: 'llama-server not found. Complete the host setup step to install it.'
+        };
+      }
+    }
+
+    try {
+      inferenceServerProcess = spawn(llamaBinary, args, {
         stdio: 'ignore',
         detached: false
       });
@@ -462,5 +481,279 @@ ipcMain.handle('get-inference-server-status', async () => {
     };
   } catch (err) {
     return { running: false, url: null };
+  }
+});
+
+
+// --- Host hardware detection ---
+
+ipcMain.handle('detect-host-hardware', async () => {
+  const result = {
+    llamaServerFound: false,
+    llamaServerPath: null,
+    gpu: { type: 'cpu', name: null, vramGB: 0 },
+    recommendedVariant: 'cpu',
+    platform: process.platform,
+  };
+
+  // 1. Check if llama-server is already in PATH
+  try {
+    const cmd = process.platform === 'win32' ? 'where llama-server' : 'which llama-server';
+    const found = execSync(cmd, { encoding: 'utf-8' }).trim();
+    if (found) {
+      result.llamaServerFound = true;
+      result.llamaServerPath = found.split('\n')[0].trim();
+    }
+  } catch (e) {
+    // Also check known install location
+    const knownPath = process.platform === 'win32'
+      ? 'C:\\llama-server\\llama-server.exe'
+      : '/usr/local/bin/llama-server';
+    if (fs.existsSync(knownPath)) {
+      result.llamaServerFound = true;
+      result.llamaServerPath = knownPath;
+    }
+  }
+
+  // 2. Detect GPU on Windows
+  if (process.platform === 'win32') {
+    try {
+      const output = execSync(
+        'wmic path Win32_VideoController get Name,AdapterRAM /format:csv',
+        { encoding: 'utf-8', timeout: 10000 }
+      );
+      const lines = output.split('\n').filter(l => l.trim() && !l.startsWith('Node'));
+      for (const line of lines) {
+        const parts = line.split(',');
+        const ramBytes = parseInt(parts[1], 10);
+        const name = parts[2]?.trim() ?? '';
+        if (!name || name === 'Microsoft Basic Display Adapter') continue;
+        const vramGB = Math.round(ramBytes / 1e9);
+        if (name.match(/NVIDIA|GeForce|Quadro|Tesla/i)) {
+          result.gpu = { type: 'nvidia', name, vramGB };
+          try {
+            const nvOut = execSync(
+              'nvidia-smi --query-gpu=driver_version --format=csv,noheader',
+              { encoding: 'utf-8', timeout: 5000 }
+            ).trim();
+            const driverMajor = parseInt(nvOut.split('.')[0], 10);
+            result.recommendedVariant = driverMajor >= 525 ? 'cuda-cu12.4' : 'cuda-cu11.7';
+          } catch {
+            result.recommendedVariant = 'cuda-cu12.4';
+          }
+          break;
+        } else if (name.match(/AMD|Radeon|RX\s/i)) {
+          result.gpu = { type: 'amd', name, vramGB };
+          result.recommendedVariant = 'vulkan';
+          break;
+        } else if (name.match(/Intel/i)) {
+          result.gpu = { type: 'intel', name, vramGB };
+          result.recommendedVariant = 'vulkan';
+          break;
+        }
+      }
+    } catch (e) {
+      result.gpu = { type: 'cpu', name: null, vramGB: 0 };
+      result.recommendedVariant = 'cpu';
+    }
+  }
+
+  // 3. Detect GPU on macOS
+  if (process.platform === 'darwin') {
+    try {
+      const output = execSync('system_profiler SPDisplaysDataType', { encoding: 'utf-8', timeout: 10000 });
+      const isAppleSilicon = output.match(/Apple M[0-9]/i) || process.arch === 'arm64';
+      if (isAppleSilicon) {
+        const ramMatch = output.match(/VRAM[^:]*:\s*(\d+)\s*(GB|MB)/i);
+        const vramGB = ramMatch
+          ? (ramMatch[2] === 'GB' ? parseInt(ramMatch[1]) : Math.floor(parseInt(ramMatch[1]) / 1024))
+          : Math.floor(os.totalmem() / 1e9 * 0.75);
+        result.gpu = { type: 'apple', name: 'Apple Silicon (Metal)', vramGB };
+        result.recommendedVariant = 'metal';
+      }
+    } catch (e) {
+      result.recommendedVariant = 'metal';
+    }
+  }
+
+  // 4. Detect GPU on Linux
+  if (process.platform === 'linux') {
+    try {
+      const lspci = execSync('lspci 2>/dev/null | grep -i vga', { encoding: 'utf-8', timeout: 5000 });
+      if (lspci.match(/NVIDIA/i)) {
+        result.gpu = { type: 'nvidia', name: lspci.trim().split(':').pop().trim(), vramGB: 0 };
+        result.recommendedVariant = 'cuda-cu12.4';
+      } else if (lspci.match(/AMD|Radeon/i)) {
+        result.gpu = { type: 'amd', name: lspci.trim().split(':').pop().trim(), vramGB: 0 };
+        result.recommendedVariant = 'vulkan';
+      }
+    } catch (e) {
+      result.recommendedVariant = 'cpu';
+    }
+  }
+
+  return result;
+});
+
+// --- llama.cpp download URL resolver ---
+
+ipcMain.handle('get-llama-download-url', async (event, variant) => {
+  const https = require('https');
+
+  const WIN_PATTERNS = {
+    'cpu':         'llama-{version}-bin-win-cpu-x64.zip',
+    'cuda-cu11.7': 'llama-{version}-bin-win-cuda-cu11.7-x64.zip',
+    'cuda-cu12.4': 'llama-{version}-bin-win-cuda-cu12.4-x64.zip',
+    'vulkan':      'llama-{version}-bin-win-vulkan-x64.zip',
+  };
+  const MAC_PATTERNS = {
+    'metal': 'llama-{version}-bin-macos-arm64.zip',
+    'cpu':   'llama-{version}-bin-macos-x64.zip',
+  };
+  const LINUX_PATTERNS = {
+    'cpu':         'llama-{version}-bin-linux-x64.zip',
+    'cuda-cu12.4': 'llama-{version}-bin-linux-cuda-cu12.4-x64.zip',
+    'vulkan':      'llama-{version}-bin-linux-vulkan-x64.zip',
+  };
+
+  try {
+    const releaseData = await new Promise((resolve, reject) => {
+      https.get(
+        'https://api.github.com/repos/ggml-org/llama.cpp/releases/latest',
+        { headers: { 'User-Agent': 'rpc-cluster-configurator' } },
+        (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            try { resolve(JSON.parse(data)); }
+            catch (e) { reject(e); }
+          });
+        }
+      ).on('error', reject);
+    });
+
+    const version = releaseData.tag_name;
+    const patterns = process.platform === 'win32' ? WIN_PATTERNS
+      : process.platform === 'darwin' ? MAC_PATTERNS : LINUX_PATTERNS;
+    const pattern = patterns[variant] ?? patterns['cpu'];
+    const filename = pattern.replace('{version}', version);
+
+    const asset = releaseData.assets.find(a =>
+      a.name === filename ||
+      a.name.toLowerCase().includes(filename.replace(`llama-${version}-bin-`, '').replace('.zip', '').toLowerCase())
+    );
+
+    if (!asset) {
+      return { ok: false, error: `No asset found for "${variant}" in release ${version}`, allAssets: releaseData.assets.map(a => a.name) };
+    }
+
+    return { ok: true, url: asset.browser_download_url, filename: asset.name, version, sizeMB: Math.round(asset.size / 1e6) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// --- llama-server installer ---
+
+ipcMain.handle('install-llama-server', async (event, downloadUrl) => {
+  const https = require('https');
+
+  const INSTALL_DIR = process.platform === 'win32'
+    ? path.join('C:\\', 'llama-server')
+    : '/usr/local/bin';
+  const tmpZip = path.join(os.tmpdir(), 'llama-cpp-download.zip');
+
+  try {
+    // Download with redirect following
+    await new Promise((resolve, reject) => {
+      function download(url) {
+        https.get(url, (res) => {
+          if (res.statusCode === 301 || res.statusCode === 302) {
+            download(res.headers.location);
+            return;
+          }
+          const total = parseInt(res.headers['content-length'], 10) || 0;
+          let downloaded = 0;
+          const file = fs.createWriteStream(tmpZip);
+          res.on('data', chunk => {
+            downloaded += chunk.length;
+            file.write(chunk);
+            if (mainWindow && total > 0) {
+              mainWindow.webContents.send('install-progress', {
+                stage: 'downloading',
+                percent: Math.round((downloaded / total) * 100),
+                downloaded: Math.round(downloaded / 1e6),
+                total: Math.round(total / 1e6)
+              });
+            }
+          });
+          res.on('end', () => { file.end(resolve); });
+          res.on('error', reject);
+        }).on('error', reject);
+      }
+      download(downloadUrl);
+    });
+
+    // Extract
+    if (mainWindow) {
+      mainWindow.webContents.send('install-progress', { stage: 'extracting', percent: 50 });
+    }
+
+    const AdmZip = require('adm-zip');
+    fs.mkdirSync(INSTALL_DIR, { recursive: true });
+    const zip = new AdmZip(tmpZip);
+    const entries = zip.getEntries();
+
+    const binaryName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
+    const entry = entries.find(e => e.entryName.endsWith(binaryName) && !e.isDirectory);
+
+    if (!entry) {
+      return { ok: false, error: 'llama-server binary not found in downloaded archive.' };
+    }
+
+    zip.extractEntryTo(entry, INSTALL_DIR, false, true);
+    const destPath = path.join(INSTALL_DIR, binaryName);
+
+    if (process.platform !== 'win32') {
+      fs.chmodSync(destPath, 0o755);
+    }
+
+    // PATH update on Windows
+    if (process.platform === 'win32') {
+      if (mainWindow) {
+        mainWindow.webContents.send('install-progress', { stage: 'configuring', percent: 90 });
+      }
+      try {
+        execSync(`setx PATH "%PATH%;${INSTALL_DIR}" /M`, { encoding: 'utf-8' });
+      } catch (e) {
+        try { execSync(`setx PATH "%PATH%;${INSTALL_DIR}"`, { encoding: 'utf-8' }); } catch (e2) {}
+      }
+    }
+
+    if (mainWindow) {
+      mainWindow.webContents.send('install-progress', { stage: 'complete', percent: 100, installDir: INSTALL_DIR });
+    }
+
+    return { ok: true, installDir: INSTALL_DIR, binaryPath: destPath };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    try { fs.unlinkSync(tmpZip); } catch (e) {}
+  }
+});
+
+// --- Utility handlers ---
+
+ipcMain.handle('restart-app', async () => {
+  app.relaunch();
+  app.exit(0);
+});
+
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 });
