@@ -1,65 +1,62 @@
-# RPC Cluster — Product Requirements Document
+# RPC Cluster - Product Requirements Document
 
 ## Original Problem Statement
-Build the `rpc-cluster` system to distribute LLM inference across multiple devices on a local network using llama.cpp's RPC backend. The system includes:
-- An LM Studio Generator Plugin (`rpc-cluster-plugin`)
-- A Node.js UDP worker beacon (`worker-beacon`)
-- Cross-platform native installers (`installers/`)
-- A standalone Electron Configurator app (`configurator/`)
-- An Android worker application (`android-worker/`)
+Build the `rpc-cluster` system to distribute LLM inference across multiple devices on a local network using llama.cpp's RPC backend. Components: LM Studio Plugin, Node.js UDP worker beacon, cross-platform installers, Electron Configurator app, Android worker app.
 
 ## Architecture
 ```
 /app/
 ├── .github/workflows/         # CI/CD (macOS, Win, Linux, Android, Configurator)
-├── android-worker/            # Android Kotlin/NDK app (JNI wrapper for llama.cpp rpc-server)
-├── configurator/              # Electron GUI (vanilla HTML/JS/CSS, no frameworks)
-│   ├── main.js                # IPC handlers, hardware detection, zip extraction
-│   ├── preload.js             # contextBridge API surface
-│   ├── renderer/index.html    # Step 0-5 state machine UI
-│   └── shared/discovery.js    # UDP discovery
-├── installers/                # Native OS installers (macOS, Windows, Linux)
+├── android-worker/            # Kotlin/NDK Android worker (JNI llama.cpp rpc-server)
+├── configurator/              # Electron GUI (vanilla HTML/JS/CSS)
+│   ├── main.js                # IPC handlers, multi-model management, hardware detection
+│   ├── preload.js             # contextBridge (8 model handlers + existing ones)
+│   ├── renderer/index.html    # Step 0-5 UI with multi-model support
+│   └── shared/discovery.js
+├── installers/                # Native OS installers
 ├── rpc-cluster-plugin/        # LM Studio Plugin (TypeScript/ESM)
-│   └── src/index.ts           # PluginContext.withGenerator entry point
-├── worker-beacon/             # Node.js UDP beacon broadcaster
-├── Makefile
+├── worker-beacon/             # Node.js UDP broadcaster
 └── README.md
 ```
+
+## Config Schema (v2)
+```json
+{
+  "version": 2,
+  "workers": [{ "hostname", "ip", "port", "vramGB", "platform", "enabled" }],
+  "models": [{ "id", "name", "modelPath", "port", "nGpuLayers", "maxTokens", "temperature", "enabled", "status" }]
+}
+```
+- Auto-migration from v1 (single modelPath) to v2 (models array)
+- Status always reset to "stopped" on load
 
 ## Key Ports
 - 5005/UDP: Discovery broadcast
 - 50052/TCP: Worker RPC server
-- 18080/TCP: Inference server (Configurator Step 5)
-- 18090/TCP: Test cluster server
-
-## Constraints
-- Configurator: vanilla HTML/JS/CSS only (no React/Vue/Vite)
-- LM Studio SDK: must use `export async function main(context: PluginContext)` with ESM/NodeNext
-- Android: JNI runs llama.cpp rpc-server in `std::thread`; requires WakeLock + MulticastLock
+- 18080+/TCP: Inference servers (one per model, auto-assigned)
+- 18090/TCP: Reserved for test-cluster (excluded from auto-assignment)
 
 ## Completed Features
-- [x] LM Studio Plugin (`rpc-cluster-plugin`) with SDK integration
+- [x] LM Studio Plugin with SDK integration
 - [x] UDP Worker Beacon with directed subnet broadcast
 - [x] Windows/macOS/Linux native installers + CI/CD
-- [x] Configurator Electron app (Steps 0-5)
-- [x] Step 0: Hardware detection (GPU/VRAM) + llama-server auto-installer
-- [x] Step 0: Full zip extraction (all .dll/.so/.dylib files, not just binary)
-- [x] Step 0: DLL completeness check (`check-llama-installation`)
-- [x] Step 0: Reinstall/Repair UI (subtle button + prominent warning when DLLs missing)
-- [x] Step 0: Repair mode banner, `isRepairMode` state flag
-- [x] Step 1: LAN worker scan + manual IP entry
-- [x] Step 2: Model browser + manual path input
-- [x] Step 3: Advanced settings (GPU layers, tokens, temperature)
-- [x] Step 4: Save & test cluster
-- [x] Step 5: Start/stop inference server with DLL pre-flight check
-- [x] Edit, Reset, Clear all flows
-- [x] Android Worker App (Kotlin, Jetpack Compose, NDK/JNI)
-- [x] All CI/CD pipelines (GitHub Actions)
+- [x] Android Worker App (Kotlin, NDK, JNI)
+- [x] Configurator Step 0: Hardware detection, llama-server auto-installer, DLL extraction, Reinstall/Repair
+- [x] Configurator Step 1: LAN worker scan + manual IP entry
+- [x] Configurator Step 2: **Multi-model manager** (add/edit/remove models, inline forms, per-model cards)
+- [x] Configurator Step 3: Advanced settings (defaults for new models)
+- [x] Configurator Step 4: Save & test (per-model sequential testing with results)
+- [x] Configurator Step 5: **Per-model inference server management** (start/stop individually or all, progress, curl commands)
+- [x] Config v2 schema with v1→v2 auto-migration
+- [x] inferenceProcesses Map (multiple concurrent llama-server processes)
+- [x] Sequential "Start all" with 2s gap (RAM contention prevention)
+- [x] DLL pre-flight check before starting any model
+- [x] Port auto-assignment (18080+, skips 18090)
 
 ## Test Suite
-- 54 tests across 4 files in `rpc-cluster-plugin/` (discovery, config, utils, generator) — all passing
+- 54 tests across 4 files in `rpc-cluster-plugin/` — all passing
 
 ## Backlog
-- P1: Comprehensive E2E testing (Electron app + Android worker + distributed inference)
-- P2: Code signing for production distribution (GitHub secrets)
-- P3: Refactor index.html (~1840 lines) — split JS/CSS into external files
+- P1: E2E testing (Electron + Android worker + distributed inference)
+- P2: Code signing for production distribution
+- P3: Refactor index.html (~2100 lines) — split JS/CSS into external files

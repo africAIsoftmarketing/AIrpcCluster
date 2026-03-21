@@ -578,6 +578,111 @@
       color: #888;
       margin-top: 2px;
     }
+
+    /* Model Cards */
+    .model-card {
+      background: #1e1e2e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+
+    .model-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .model-card-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 500;
+      color: #e8e8e8;
+    }
+
+    .model-card-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .model-card-actions button {
+      background: transparent;
+      border: 1px solid #444;
+      color: #aaa;
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .model-card-actions button:hover {
+      border-color: #7c6df0;
+      color: #7c6df0;
+    }
+
+    .model-card-details {
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+
+    .model-card-endpoint {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
+
+    .model-card-endpoint span {
+      flex: 1;
+      font-family: monospace;
+      font-size: 12px;
+      color: #ccc;
+    }
+
+    .model-card-endpoint button {
+      background: transparent;
+      border: none;
+      color: #7c6df0;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 6px;
+    }
+
+    /* Server Cards */
+    .server-card {
+      background: #1e1e2e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 10px;
+    }
+
+    .server-card.running {
+      border-color: #4caf50;
+      background: #0a1f0a;
+    }
+
+    .server-card.error {
+      border-color: #f44336;
+      background: #1f0a0a;
+    }
+
+    .server-card.starting {
+      border-color: #EF9F27;
+      background: #1a1500;
+    }
   </style>
 </head>
 <body>
@@ -781,27 +886,65 @@
       </div>
     </div>
 
-    <!-- Step 2: Select model -->
+    <!-- Step 2: Configure models -->
     <div class="card">
-      <div class="card-header">
-        <div class="step-badge">2</div>
-        <h2 class="card-title">Select model</h2>
+      <div class="card-header" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="step-badge">2</div>
+          <h2 class="card-title">Configure models</h2>
+        </div>
+        <button id="show-add-model-btn" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px;">+ Add model</button>
       </div>
-      
-      <button id="browse-models-btn" class="btn btn-primary">Browse models</button>
-      
-      <div id="models-container" class="hidden">
-        <div id="models-list" class="models-list"></div>
+
+      <div id="models-empty-state" style="text-align: center; padding: 24px; color: #666; font-size: 14px;">
+        No models configured yet.<br>Click <strong style="color: #aaa;">+ Add model</strong> to add your first model.
       </div>
-      
-      <div id="no-models-info" class="info-box hidden">
-        No .gguf models found in LM Studio's models folder. Download a model via LM Studio first, then click Refresh.
-        <button id="refresh-models-btn" class="btn btn-secondary" style="margin-top: 12px;">Refresh</button>
-      </div>
-      
-      <div class="input-group">
-        <label for="model-path-input">Or enter path manually</label>
-        <input type="text" id="model-path-input" class="input" placeholder="/path/to/model.gguf">
+
+      <div id="model-cards-container"></div>
+
+      <div id="model-form-container" class="hidden" style="background: #1e1e2e; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-top: 12px;">
+        <div id="model-form-title" style="font-size: 14px; font-weight: 500; margin-bottom: 12px; color: #e8e8e8;">Add new model</div>
+
+        <div class="input-group" style="margin-top: 0;">
+          <label for="mf-name">Model name</label>
+          <input type="text" id="mf-name" class="input" placeholder="My Model">
+        </div>
+
+        <div class="input-group">
+          <label for="mf-path">Model file (.gguf)</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="mf-path" class="input" placeholder="/path/to/model.gguf" style="flex: 1;">
+            <button id="mf-browse-btn" class="btn btn-secondary" style="white-space: nowrap; padding: 8px 12px; font-size: 13px;">Browse</button>
+          </div>
+        </div>
+
+        <div id="mf-browse-results" class="hidden models-list" style="margin-top: 8px; max-height: 200px;"></div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-top: 12px;">
+          <div class="input-group" style="margin-top: 0;">
+            <label for="mf-port">Port</label>
+            <input type="number" id="mf-port" class="input" value="18080" min="1024" max="65535">
+          </div>
+          <div class="input-group" style="margin-top: 0;">
+            <label for="mf-gpu">GPU layers</label>
+            <input type="number" id="mf-gpu" class="input" value="99" min="0" max="999">
+          </div>
+          <div class="input-group" style="margin-top: 0;">
+            <label for="mf-tokens">Max tokens</label>
+            <input type="number" id="mf-tokens" class="input" value="2048" min="1" max="32768">
+          </div>
+          <div class="input-group" style="margin-top: 0;">
+            <label for="mf-temp">Temperature</label>
+            <input type="number" id="mf-temp" class="input" value="0.7" min="0" max="2" step="0.1">
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button id="mf-submit-btn" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px;">Add model</button>
+          <button id="mf-cancel-btn" class="btn btn-secondary" style="font-size: 13px; padding: 8px 16px;">Cancel</button>
+        </div>
+
+        <div id="mf-error" class="error-box hidden" style="margin-top: 8px;"></div>
       </div>
     </div>
 
@@ -854,14 +997,14 @@
       
       <div class="summary-card">
         <div class="summary-row">
-          <span class="summary-label">Model:</span>
-          <span id="summary-model" class="summary-value not-set">Not selected</span>
-        </div>
-        <div class="summary-row">
           <span class="summary-label">Workers:</span>
           <span id="summary-workers" class="summary-value">Local only (no workers)</span>
         </div>
-        <div id="summary-secondary" class="summary-secondary"></div>
+        <div class="summary-row">
+          <span class="summary-label">Models:</span>
+          <span id="summary-models" class="summary-value not-set">None configured</span>
+        </div>
+        <div id="summary-models-list" style="margin-left: 100px; margin-top: 4px; font-size: 13px; color: #aaa; line-height: 1.8;"></div>
       </div>
       
       <button id="save-btn" class="btn btn-primary btn-full">Save configuration</button>
@@ -869,100 +1012,38 @@
       <div id="save-error" class="error-box hidden"></div>
       
       <div id="save-success" class="success-box hidden">
-        Configuration saved. Open LM Studio and select RPC Cluster in the model picker to start using your cluster.
+        Worker configuration saved. Start your models in Step 5 to begin inference.
       </div>
       
       <button id="edit-config-btn" class="hidden" style="width: 100%; background: transparent; border: 1px solid #7c6df0; color: #7c6df0; font-size: 13px; padding: 10px; border-radius: 6px; margin-top: 8px; cursor: pointer;">Edit configuration</button>
-      <div id="edit-server-warning" class="hidden" style="color: #f44336; font-size: 12px; margin-top: 6px;">Stop the inference server before editing the configuration.</div>
       
-      <button id="test-btn" class="btn btn-secondary btn-full hidden" style="margin-top: 12px;">Test cluster</button>
+      <button id="test-btn" class="btn btn-secondary btn-full hidden" style="margin-top: 12px;">Test all models</button>
       
-      <div id="test-result" class="test-result hidden">
-        <div id="test-result-title" class="test-result-title"></div>
-        <div id="test-result-message"></div>
-      </div>
+      <div id="test-results" class="hidden" style="margin-top: 12px;"></div>
       
       <a id="footer-open-folder" class="footer-link">Open config folder →</a>
     </div>
 
-    <!-- Step 5: Start inference server -->
+    <!-- Step 5: Manage inference servers -->
     <div class="card">
-      <div class="card-header">
-        <div class="step-badge">5</div>
-        <div>
-          <h2 class="card-title">Start inference server</h2>
-          <p class="card-subtitle">Launch llama-server with your cluster configuration and connect it to LM Studio as a remote model.</p>
+      <div class="card-header" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="step-badge">5</div>
+          <div>
+            <h2 class="card-title">Manage inference servers</h2>
+            <p class="card-subtitle">Start or stop each model's inference server independently.</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button id="start-all-btn" class="btn btn-primary" style="font-size: 12px; padding: 8px 14px;">Start all</button>
+          <button id="stop-all-btn" class="btn btn-danger" style="font-size: 12px; padding: 8px 14px;">Stop all</button>
         </div>
       </div>
 
-      <button id="server-btn" class="btn btn-primary btn-full" disabled title="Save configuration first">Start inference server</button>
+      <div id="server-cards-container"></div>
 
-      <!-- State A: idle -->
-      <div id="server-idle" class="server-info-box">
-        <div class="server-status-row">
-          <span class="status-dot idle"></span>
-          <span>Server not running</span>
-        </div>
-        <p style="font-size: 12px; color: #888; margin-top: 8px;">Once started, connect LM Studio to this server as a remote model.</p>
-      </div>
-
-      <!-- State B: starting -->
-      <div id="server-starting" class="server-info-box hidden">
-        <div class="server-status-row">
-          <div class="spinner"></div>
-          <span id="server-starting-text">Launching llama-server…</span>
-        </div>
-        <p style="font-size: 12px; color: #888; margin-top: 8px;">This may take up to 30 seconds on first run.</p>
-      </div>
-
-      <!-- State C: running -->
-      <div id="server-running" class="server-success-panel hidden">
-        <div class="server-status-row">
-          <span class="status-dot running"></span>
-          <span style="color: #4caf50; font-weight: 500;">Server running</span>
-        </div>
-
-        <p style="font-size: 13px; color: #aaa; margin-top: 12px;">API endpoint:</p>
-        <div class="api-url-box">
-          <span class="api-url-text">http://localhost:18080/v1</span>
-          <button id="copy-url-btn" class="copy-btn">Copy</button>
-        </div>
-
-        <div id="server-model-info" class="server-detail-row"></div>
-        <div id="server-workers-info" class="server-detail-row"></div>
-
-        <hr class="server-divider">
-
-        <div class="server-instructions">
-          <strong>How to connect to LM Studio:</strong>
-          <ol>
-            <li>Open LM Studio</li>
-            <li>Click the model selector at the top</li>
-            <li>Select "Use a remote model via URL"</li>
-            <li>Enter: <code>http://localhost:18080/v1</code></li>
-            <li>Start chatting — inference runs on your cluster</li>
-          </ol>
-        </div>
-
-        <hr class="server-divider">
-
-        <div class="server-instructions">
-          <strong>Or use with any OpenAI-compatible client:</strong>
-        </div>
-        <div id="curl-block" class="curl-block">curl http://localhost:18080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "local",
-    "messages": [{"role":"user","content":"Hello"}],
-    "stream": false
-  }'</div>
-        <button id="copy-curl-btn" class="btn btn-secondary" style="margin-top: 8px; font-size: 12px; padding: 8px 14px;">Copy curl command</button>
-      </div>
-
-      <!-- State D: error -->
-      <div id="server-error" class="server-error-panel hidden">
-        <div class="error-title">Failed to start server</div>
-        <div id="server-error-message" class="error-message"></div>
+      <div id="server-empty-state" style="text-align: center; padding: 24px; color: #666; font-size: 14px;">
+        No models configured. Add models in Step 2 first.
       </div>
     </div>
   </div>
@@ -971,14 +1052,16 @@
     // State
     const state = {
       workers: [],
-      modelPath: '',
+      models: [],
+      serverStatuses: {},
+      serverErrors: {},
+      serverUrls: {},
       nGpuLayers: 99,
       maxTokens: 2048,
       temperature: 0.7,
       discoveryTimeoutMs: 4000,
       configSaved: false,
-      serverRunning: false,
-      serverUrl: null,
+      editingModelId: null,
     };
 
     // Platform helpers
@@ -992,7 +1075,6 @@
     }
 
     function getConfigPath() {
-      // This is just for display - actual path is determined in main process
       const home = '~';
       const platform = navigator.platform.toLowerCase();
       if (platform.includes('mac')) {
@@ -1003,9 +1085,13 @@
       return `${home}/.config/rpc-cluster/config.json`;
     }
 
-    // Sanitize model path — strip surrounding quotes
     function sanitizeModelPath(p) {
       return p.trim().replace(/^["']|["']$/g, '');
+    }
+
+    function pathBasename(p) {
+      if (!p) return '';
+      return p.split(/[/\\]/).pop() || '';
     }
 
     // llama.cpp variant labels and descriptions
@@ -1038,7 +1124,6 @@
       ['hw-checking', 'hw-found', 'hw-not-found', 'hw-download', 'hw-installing', 'hw-complete', 'hw-failed']
         .forEach(id => document.getElementById(id).classList.add('hidden'));
       if (name) document.getElementById(name).classList.remove('hidden');
-      // Hide repair banner when entering State C normally (not via repair)
       if (name === 'hw-not-found' && !hwState.isRepairMode) {
         document.getElementById('repair-banner').classList.add('hidden');
       }
@@ -1055,7 +1140,6 @@
           document.getElementById('hw-found-gpu').textContent = 'GPU: ' + (hw.gpu.name || 'CPU only');
           document.getElementById('step0-badge').style.background = '#4caf50';
 
-          // Check DLL completeness
           try {
             const installCheck = await window.rpcCluster.checkLlamaInstallation();
             if (installCheck.missingDlls && installCheck.missingDlls.length > 0) {
@@ -1070,15 +1154,12 @@
               document.getElementById('reinstall-btn-prominent').classList.remove('hidden');
               document.getElementById('step0-badge').style.background = '#EF9F27';
             }
-          } catch (e) {
-            // Ignore DLL check errors
-          }
+          } catch (e) {}
 
           showHwState('hw-found');
           return;
         }
 
-        // Not found — populate State C
         populateVariantSelector(hw);
         showHwState('hw-not-found');
       } catch (err) {
@@ -1125,7 +1206,7 @@
     async function getDownloadLink() {
       const btn = document.getElementById('get-download-btn');
       btn.disabled = true;
-      btn.textContent = 'Fetching latest release…';
+      btn.textContent = 'Fetching latest release...';
 
       try {
         const result = await window.rpcCluster.getLlamaDownloadUrl(hwState.variant);
@@ -1157,11 +1238,11 @@
         const text = document.getElementById('install-progress-text');
         bar.style.width = (data.percent || 0) + '%';
         if (data.stage === 'downloading') {
-          text.textContent = 'Downloading llama-server… (' + data.downloaded + ' MB / ' + data.total + ' MB)';
+          text.textContent = 'Downloading llama-server... (' + data.downloaded + ' MB / ' + data.total + ' MB)';
         } else if (data.stage === 'extracting') {
-          text.textContent = 'Extracting archive…' + (data.currentFile ? ' (' + data.currentFile + ')' : '');
+          text.textContent = 'Extracting archive...' + (data.currentFile ? ' (' + data.currentFile + ')' : '');
         } else if (data.stage === 'configuring') {
-          text.textContent = 'Configuring PATH…';
+          text.textContent = 'Configuring PATH...';
         } else if (data.stage === 'complete') {
           text.textContent = 'Complete!';
         }
@@ -1182,74 +1263,68 @@
       }
     }
 
-    // Build config object
+    // --- Config helpers ---
+
     function buildConfig() {
       return {
-        modelPath: sanitizeModelPath(state.modelPath),
-        nGpuLayers: state.nGpuLayers,
-        maxTokens: state.maxTokens,
-        temperature: state.temperature,
-        discoveryTimeoutMs: state.discoveryTimeoutMs,
-        workers: state.workers.map(w => ({ ...w }))
+        workers: state.workers.map(w => ({ ...w })),
       };
     }
 
-    // Update summary display
     function updateSummary() {
-      const modelEl = document.getElementById('summary-model');
       const workersEl = document.getElementById('summary-workers');
-      const secondaryEl = document.getElementById('summary-secondary');
-      
-      if (state.modelPath) {
-        const filename = state.modelPath.split(/[/\\]/).pop();
-        modelEl.textContent = filename;
-        modelEl.classList.remove('not-set');
-      } else {
-        modelEl.textContent = 'Not selected';
-        modelEl.classList.add('not-set');
-      }
-      
+      const modelsEl = document.getElementById('summary-models');
+      const modelsListEl = document.getElementById('summary-models-list');
+
       const enabledWorkers = state.workers.filter(w => w.enabled);
       if (enabledWorkers.length === 0) {
         workersEl.textContent = 'Local only (no workers)';
       } else {
         const names = enabledWorkers.map(w => w.hostname).join(', ');
-        workersEl.textContent = `${enabledWorkers.length} worker(s): ${names}`;
+        workersEl.textContent = enabledWorkers.length + ' worker(s): ' + names;
       }
-      
-      secondaryEl.textContent = `GPU layers: ${state.nGpuLayers} · Max tokens: ${state.maxTokens} · Temperature: ${state.temperature}`;
+
+      if (state.models.length === 0) {
+        modelsEl.textContent = 'None configured';
+        modelsEl.classList.add('not-set');
+        modelsListEl.innerHTML = '';
+      } else {
+        modelsEl.textContent = state.models.length + ' configured';
+        modelsEl.classList.remove('not-set');
+        modelsListEl.innerHTML = state.models.map(m =>
+          '<div style="font-size: 12px;">' + escapeHtml(m.name) + ' &rarr; :' + m.port + '</div>'
+        ).join('');
+      }
     }
 
-    // Render workers table
+    // --- Workers ---
+
     function renderWorkers() {
       const container = document.getElementById('workers-container');
       const tbody = document.getElementById('workers-tbody');
       const warning = document.getElementById('no-workers-warning');
       const rescanBtn = document.getElementById('rescan-btn');
       const manualForm = document.getElementById('manual-worker-form');
-      
+
       rescanBtn.classList.remove('hidden');
       manualForm.classList.remove('hidden');
       document.getElementById('clear-all-btn').classList.remove('hidden');
-      
+
       if (state.workers.length === 0) {
         container.classList.add('hidden');
         warning.classList.remove('hidden');
       } else {
         container.classList.remove('hidden');
         warning.classList.add('hidden');
-        
-        tbody.innerHTML = state.workers.map((worker, index) => `
-          <tr>
-            <td>${escapeHtml(worker.hostname)}</td>
-            <td>${worker.ip}:${worker.port}</td>
-            <td>${worker.vramGB > 0 ? worker.vramGB + ' GB' : 'CPU only'}</td>
-            <td>${getPlatformName(worker.platform)}</td>
-            <td><input type="checkbox" data-index="${index}" ${worker.enabled ? 'checked' : ''}></td>
-          </tr>
-        `).join('');
-        
-        // Add checkbox listeners
+
+        tbody.innerHTML = state.workers.map((worker, index) => '<tr>' +
+            '<td>' + escapeHtml(worker.hostname) + '</td>' +
+            '<td>' + worker.ip + ':' + worker.port + '</td>' +
+            '<td>' + (worker.vramGB > 0 ? worker.vramGB + ' GB' : 'CPU only') + '</td>' +
+            '<td>' + getPlatformName(worker.platform) + '</td>' +
+            '<td><input type="checkbox" data-index="' + index + '"' + (worker.enabled ? ' checked' : '') + '></td>' +
+          '</tr>').join('');
+
         tbody.querySelectorAll('input[type="checkbox"]').forEach(cb => {
           cb.addEventListener('change', (e) => {
             const idx = parseInt(e.target.dataset.index);
@@ -1258,71 +1333,435 @@
           });
         });
       }
-      
+
       updateSummary();
     }
 
-    // Render models list
-    function renderModels(models) {
-      const container = document.getElementById('models-container');
-      const list = document.getElementById('models-list');
-      const noModels = document.getElementById('no-models-info');
-      
-      if (models.length === 0) {
-        container.classList.add('hidden');
-        noModels.classList.remove('hidden');
-      } else {
-        container.classList.remove('hidden');
-        noModels.classList.add('hidden');
-        
-        list.innerHTML = models.map((model, index) => `
-          <div class="model-item ${model.path === state.modelPath ? 'selected' : ''}" data-path="${escapeAttr(model.path)}">
-            <input type="radio" name="model" ${model.path === state.modelPath ? 'checked' : ''}>
-            <span class="model-name">${escapeHtml(model.name)}</span>
-            <span class="model-size">${model.sizeGB} GB</span>
-          </div>
-        `).join('');
-        
-        // Add click listeners
-        list.querySelectorAll('.model-item').forEach(item => {
-          item.addEventListener('click', () => {
-            state.modelPath = item.dataset.path;
-            document.getElementById('model-path-input').value = state.modelPath;
-            renderModels(models);
-            updateSummary();
-          });
+    // --- Model cards (Step 2) ---
+
+    function renderModelCards() {
+      const container = document.getElementById('model-cards-container');
+      const emptyState = document.getElementById('models-empty-state');
+
+      if (state.models.length === 0) {
+        emptyState.style.display = '';
+        container.innerHTML = '';
+        updateSummary();
+        renderServerCards();
+        return;
+      }
+      emptyState.style.display = 'none';
+
+      container.innerHTML = state.models.map(model => {
+        const status = state.serverStatuses[model.id] || 'stopped';
+        const dotColor = status === 'running' ? '#4caf50' : status === 'starting' ? '#EF9F27' : '#666';
+        const isRunning = status === 'running';
+        const url = state.serverUrls[model.id] || ('http://localhost:' + model.port + '/v1');
+
+        return '<div class="model-card" data-model-id="' + model.id + '">' +
+          '<div class="model-card-header">' +
+            '<span class="status-dot" style="background: ' + dotColor + ';"></span>' +
+            '<span class="model-card-name">' + escapeHtml(model.name) + '</span>' +
+            '<div class="model-card-actions">' +
+              '<button class="mc-toggle-btn" data-id="' + model.id + '" title="' + (isRunning ? 'Stop' : 'Start') + '">' + (isRunning ? '&#9632;' : '&#9654;') + '</button>' +
+              '<button class="mc-edit-btn" data-id="' + model.id + '" title="Edit">&#9998;</button>' +
+              '<button class="mc-remove-btn" data-id="' + model.id + '" title="Remove">&#10005;</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="model-card-details">' +
+            'Path: ' + escapeHtml(model.modelPath || 'Not set') + '<br>' +
+            'Port: ' + model.port + ' &middot; GPU layers: ' + model.nGpuLayers + ' &middot; Temp: ' + model.temperature +
+          '</div>' +
+          (isRunning ? '<div class="model-card-endpoint"><span>' + url + '</span><button class="mc-copy-url" data-url="' + url + '">Copy</button></div>' : '') +
+          '<div class="mc-confirm-remove hidden" data-id="' + model.id + '" style="margin-top: 8px; background: #1f0a0a; border: 1px solid #c62828; border-radius: 6px; padding: 10px;">' +
+            '<span style="font-size: 13px; color: #ccc;">Remove this model?</span>' +
+            '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+              '<button class="mc-confirm-yes" data-id="' + model.id + '" style="background: #c62828; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;">Confirm</button>' +
+              '<button class="mc-confirm-no" data-id="' + model.id + '" style="background: transparent; border: 1px solid #666; color: #aaa; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;">Cancel</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      // Wire up events
+      container.querySelectorAll('.mc-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          const status = state.serverStatuses[id] || 'stopped';
+          if (status === 'running') handleStopModel(id);
+          else handleStartModel(id);
         });
+      });
+      container.querySelectorAll('.mc-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => showModelForm(btn.dataset.id));
+      });
+      container.querySelectorAll('.mc-remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          container.querySelectorAll('.mc-confirm-remove').forEach(el => el.classList.add('hidden'));
+          const el = container.querySelector('.mc-confirm-remove[data-id="' + btn.dataset.id + '"]');
+          if (el) el.classList.remove('hidden');
+        });
+      });
+      container.querySelectorAll('.mc-confirm-yes').forEach(btn => {
+        btn.addEventListener('click', () => handleRemoveModel(btn.dataset.id));
+      });
+      container.querySelectorAll('.mc-confirm-no').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const el = container.querySelector('.mc-confirm-remove[data-id="' + btn.dataset.id + '"]');
+          if (el) el.classList.add('hidden');
+        });
+      });
+      container.querySelectorAll('.mc-copy-url').forEach(btn => {
+        btn.addEventListener('click', () => copyToClipboard(btn.dataset.url, btn));
+      });
+
+      updateSummary();
+      renderServerCards();
+    }
+
+    // --- Server cards (Step 5) ---
+
+    function renderServerCards() {
+      const container = document.getElementById('server-cards-container');
+      const emptyState = document.getElementById('server-empty-state');
+
+      if (state.models.length === 0) {
+        emptyState.style.display = '';
+        container.innerHTML = '';
+        return;
+      }
+      emptyState.style.display = 'none';
+
+      const enabledWorkers = state.workers.filter(w => w.enabled);
+
+      container.innerHTML = state.models.map(model => {
+        const status = state.serverStatuses[model.id] || 'stopped';
+        const error = state.serverErrors[model.id] || '';
+        const url = state.serverUrls[model.id] || ('http://localhost:' + model.port + '/v1');
+        const cardClass = status === 'running' ? 'running' : status === 'error' ? 'error' : status === 'starting' ? 'starting' : '';
+        const dotColor = status === 'running' ? '#4caf50' : status === 'starting' ? '#EF9F27' : status === 'error' ? '#f44336' : '#666';
+        const statusText = status === 'running' ? 'Running' : status === 'starting' ? 'Starting...' : status === 'error' ? 'Failed' : 'Stopped';
+
+        var body = '';
+        if (status === 'starting') {
+          body = '<div style="margin-top: 12px;">' +
+            '<div style="background: #333; border-radius: 4px; height: 6px; overflow: hidden;">' +
+              '<div style="background: #EF9F27; height: 100%; width: 60%; animation: pulse 1.5s ease-in-out infinite;"></div>' +
+            '</div>' +
+            '<div style="font-size: 12px; color: #aaa; margin-top: 4px;">Waiting for port ' + model.port + '...</div>' +
+          '</div>';
+        } else if (status === 'running') {
+          var curlCmd = 'curl http://localhost:' + model.port + '/v1/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"local","messages":[{"role":"user","content":"Hello"}],"stream":false}\'';
+          body = '<div style="font-size: 13px; color: #aaa; margin-top: 8px;">Endpoint:</div>' +
+            '<div class="api-url-box" style="margin-top: 4px; margin-bottom: 8px;">' +
+              '<span class="api-url-text">' + url + '</span>' +
+              '<button class="sc-copy-url copy-btn" data-url="' + url + '">Copy</button>' +
+            '</div>' +
+            '<div class="server-detail-row">Workers: ' + (enabledWorkers.length > 0 ? enabledWorkers.length + ' active' : 'Local only') + '</div>' +
+            '<div class="server-detail-row">Model: ' + escapeHtml(pathBasename(model.modelPath)) + '</div>' +
+            '<hr class="server-divider">' +
+            '<div class="server-instructions"><strong>Connect with curl:</strong></div>' +
+            '<div class="curl-block" style="font-size: 11px; margin-top: 4px;">' + escapeHtml(curlCmd) + '</div>' +
+            '<button class="sc-copy-curl btn btn-secondary" data-cmd="' + escapeAttr(curlCmd) + '" style="margin-top: 6px; font-size: 11px; padding: 6px 12px;">Copy curl</button>';
+        } else if (status === 'error') {
+          body = '<div style="color: #f44336; font-size: 13px; margin-top: 8px;">' + escapeHtml(error) + '</div>' +
+            '<button class="sc-retry-btn btn btn-secondary" data-id="' + model.id + '" style="margin-top: 8px; font-size: 12px; padding: 6px 14px;">Retry</button>';
+        } else {
+          body = '<div style="font-size: 12px; color: #666; margin-top: 8px;">Port ' + model.port + ' &middot; Ready to start</div>';
+        }
+
+        var btnLabel = status === 'running' ? 'Stop server' : status === 'starting' ? 'Starting...' : 'Start server';
+        var btnClass = status === 'running' ? 'btn-danger' : 'btn-primary';
+        var btnDisabled = status === 'starting' ? ' disabled' : '';
+
+        return '<div class="server-card ' + cardClass + '">' +
+          '<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">' +
+            '<span class="status-dot" style="background: ' + dotColor + ';"></span>' +
+            '<span style="font-size: 14px; font-weight: 500; color: #e8e8e8; flex: 1;">' + escapeHtml(model.name) + '</span>' +
+            '<span style="font-size: 12px; color: #888;">' + statusText + '</span>' +
+          '</div>' +
+          body +
+          '<button class="sc-toggle-btn btn ' + btnClass + '" data-id="' + model.id + '"' + btnDisabled + ' style="width: 100%; margin-top: 12px; font-size: 13px; padding: 10px;">' + btnLabel + '</button>' +
+        '</div>';
+      }).join('');
+
+      // Wire events
+      container.querySelectorAll('.sc-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          var id = btn.dataset.id;
+          var status = state.serverStatuses[id] || 'stopped';
+          if (status === 'running') handleStopModel(id);
+          else handleStartModel(id);
+        });
+      });
+      container.querySelectorAll('.sc-copy-url').forEach(btn => {
+        btn.addEventListener('click', () => copyToClipboard(btn.dataset.url, btn));
+      });
+      container.querySelectorAll('.sc-copy-curl').forEach(btn => {
+        btn.addEventListener('click', () => copyToClipboard(btn.dataset.cmd, btn));
+      });
+      container.querySelectorAll('.sc-retry-btn').forEach(btn => {
+        btn.addEventListener('click', () => handleStartModel(btn.dataset.id));
+      });
+    }
+
+    // --- Model form (add/edit) ---
+
+    function showModelForm(editId) {
+      const form = document.getElementById('model-form-container');
+      const title = document.getElementById('model-form-title');
+      const submitBtn = document.getElementById('mf-submit-btn');
+      const errorEl = document.getElementById('mf-error');
+      errorEl.classList.add('hidden');
+
+      state.editingModelId = editId || null;
+
+      if (editId) {
+        const model = state.models.find(m => m.id === editId);
+        if (!model) return;
+        title.textContent = 'Edit model';
+        submitBtn.textContent = 'Save changes';
+        document.getElementById('mf-name').value = model.name;
+        document.getElementById('mf-path').value = model.modelPath;
+        document.getElementById('mf-port').value = model.port;
+        document.getElementById('mf-gpu').value = model.nGpuLayers;
+        document.getElementById('mf-tokens').value = model.maxTokens;
+        document.getElementById('mf-temp').value = model.temperature;
+        // Disable port if running
+        document.getElementById('mf-port').disabled = (state.serverStatuses[editId] === 'running');
+      } else {
+        title.textContent = 'Add new model';
+        submitBtn.textContent = 'Add model';
+        document.getElementById('mf-name').value = '';
+        document.getElementById('mf-path').value = '';
+        document.getElementById('mf-port').value = getNextFreePort();
+        document.getElementById('mf-gpu').value = state.nGpuLayers;
+        document.getElementById('mf-tokens').value = state.maxTokens;
+        document.getElementById('mf-temp').value = state.temperature;
+        document.getElementById('mf-port').disabled = false;
+      }
+
+      form.classList.remove('hidden');
+      document.getElementById('mf-name').focus();
+    }
+
+    function hideModelForm() {
+      document.getElementById('model-form-container').classList.add('hidden');
+      document.getElementById('mf-browse-results').classList.add('hidden');
+      state.editingModelId = null;
+    }
+
+    function getNextFreePort() {
+      var usedPorts = new Set(state.models.map(m => m.port));
+      usedPorts.add(18090);
+      var port = 18080;
+      while (usedPorts.has(port)) port++;
+      return port;
+    }
+
+    async function submitModelForm() {
+      var nameVal = document.getElementById('mf-name').value.trim();
+      var pathVal = sanitizeModelPath(document.getElementById('mf-path').value);
+      var portVal = parseInt(document.getElementById('mf-port').value, 10);
+      var gpuVal = parseInt(document.getElementById('mf-gpu').value, 10) || 99;
+      var tokensVal = parseInt(document.getElementById('mf-tokens').value, 10) || 2048;
+      var tempVal = parseFloat(document.getElementById('mf-temp').value) || 0.7;
+      var errorEl = document.getElementById('mf-error');
+
+      if (!pathVal) {
+        errorEl.textContent = 'Model file path is required.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      if (!nameVal) {
+        nameVal = pathBasename(pathVal).replace(/\.gguf$/i, '');
+      }
+      if (portVal < 1024 || portVal > 65535) {
+        errorEl.textContent = 'Port must be between 1024 and 65535.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      if (portVal === 18090) {
+        errorEl.textContent = 'Port 18090 is reserved for testing. Choose a different port.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      // Check for port conflicts
+      var conflict = state.models.find(m => m.port === portVal && m.id !== state.editingModelId);
+      if (conflict) {
+        errorEl.textContent = 'Port ' + portVal + ' is already used by "' + conflict.name + '".';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      errorEl.classList.add('hidden');
+
+      if (state.editingModelId) {
+        // Update existing model
+        var result = await window.rpcCluster.updateModel(state.editingModelId, {
+          name: nameVal,
+          modelPath: pathVal,
+          port: portVal,
+          nGpuLayers: gpuVal,
+          maxTokens: tokensVal,
+          temperature: tempVal,
+        });
+        if (!result.ok) {
+          errorEl.textContent = result.error;
+          errorEl.classList.remove('hidden');
+          return;
+        }
+        var idx = state.models.findIndex(m => m.id === state.editingModelId);
+        if (idx >= 0) {
+          Object.assign(state.models[idx], { name: nameVal, modelPath: pathVal, port: portVal, nGpuLayers: gpuVal, maxTokens: tokensVal, temperature: tempVal });
+        }
+      } else {
+        // Add new model
+        var newModel = await window.rpcCluster.addModel({
+          name: nameVal,
+          modelPath: pathVal,
+          port: portVal,
+          nGpuLayers: gpuVal,
+          maxTokens: tokensVal,
+          temperature: tempVal,
+        });
+        state.models.push(newModel);
+      }
+
+      hideModelForm();
+      renderModelCards();
+    }
+
+    async function browseModelsForForm() {
+      var browseBtn = document.getElementById('mf-browse-btn');
+      var resultsEl = document.getElementById('mf-browse-results');
+      browseBtn.disabled = true;
+      browseBtn.textContent = 'Scanning...';
+
+      try {
+        var models = await window.rpcCluster.listModels();
+        if (models.length === 0) {
+          resultsEl.innerHTML = '<div style="padding: 12px; color: #888; font-size: 13px;">No .gguf models found in LM Studio models folder.</div>';
+        } else {
+          resultsEl.innerHTML = models.map(m =>
+            '<div class="model-item" data-path="' + escapeAttr(m.path) + '" data-name="' + escapeAttr(m.name) + '">' +
+              '<span class="model-name">' + escapeHtml(m.name) + '</span>' +
+              '<span class="model-size">' + m.sizeGB + ' GB</span>' +
+            '</div>'
+          ).join('');
+
+          resultsEl.querySelectorAll('.model-item').forEach(item => {
+            item.addEventListener('click', () => {
+              document.getElementById('mf-path').value = item.dataset.path;
+              if (!document.getElementById('mf-name').value.trim()) {
+                document.getElementById('mf-name').value = item.dataset.name;
+              }
+              resultsEl.classList.add('hidden');
+            });
+          });
+        }
+        resultsEl.classList.remove('hidden');
+      } catch (err) {
+        resultsEl.innerHTML = '<div style="padding: 12px; color: #f44336; font-size: 13px;">Error: ' + escapeHtml(err.message) + '</div>';
+        resultsEl.classList.remove('hidden');
+      } finally {
+        browseBtn.disabled = false;
+        browseBtn.textContent = 'Browse';
       }
     }
 
-    // Escape HTML
+    // --- Model start/stop ---
+
+    async function handleStartModel(id) {
+      state.serverStatuses[id] = 'starting';
+      state.serverErrors[id] = '';
+      renderModelCards();
+
+      try {
+        var result = await window.rpcCluster.startModel(id);
+        if (result.ok) {
+          state.serverStatuses[id] = 'running';
+          state.serverUrls[id] = result.url;
+        } else {
+          state.serverStatuses[id] = 'error';
+          state.serverErrors[id] = result.error;
+        }
+      } catch (err) {
+        state.serverStatuses[id] = 'error';
+        state.serverErrors[id] = err.message;
+      }
+      renderModelCards();
+    }
+
+    async function handleStopModel(id) {
+      try {
+        await window.rpcCluster.stopModel(id);
+      } catch (err) {}
+      state.serverStatuses[id] = 'stopped';
+      state.serverUrls[id] = null;
+      renderModelCards();
+    }
+
+    async function handleRemoveModel(id) {
+      try {
+        await window.rpcCluster.removeModel(id);
+      } catch (err) {}
+      state.models = state.models.filter(m => m.id !== id);
+      delete state.serverStatuses[id];
+      delete state.serverErrors[id];
+      delete state.serverUrls[id];
+      renderModelCards();
+    }
+
+    async function startAllModels() {
+      var enabledModels = state.models.filter(m => m.enabled !== false);
+      for (var i = 0; i < enabledModels.length; i++) {
+        var model = enabledModels[i];
+        if (state.serverStatuses[model.id] === 'running') continue;
+        await handleStartModel(model.id);
+        // 2-second gap between starts to avoid RAM contention
+        if (i < enabledModels.length - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+    }
+
+    async function stopAllModels() {
+      try {
+        await window.rpcCluster.stopAllModels();
+      } catch (err) {}
+      state.models.forEach(m => {
+        state.serverStatuses[m.id] = 'stopped';
+        state.serverUrls[m.id] = null;
+      });
+      renderModelCards();
+    }
+
+    // --- Utilities ---
+
     function escapeHtml(text) {
-      const div = document.createElement('div');
+      var div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
     }
 
-    // Escape attribute
     function escapeAttr(text) {
-      return text.replace(/"/g, '&quot;');
+      return String(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    // Scan workers
+    // --- Scan workers ---
+
     async function scanWorkers() {
-      const scanBtn = document.getElementById('scan-btn');
-      const rescanBtn = document.getElementById('rescan-btn');
-      
+      var scanBtn = document.getElementById('scan-btn');
+      var rescanBtn = document.getElementById('rescan-btn');
+
       scanBtn.disabled = true;
       rescanBtn.disabled = true;
-      scanBtn.innerHTML = '<div class="spinner"></div> Scanning… (4s)';
-      
+      scanBtn.innerHTML = '<div class="spinner"></div> Scanning... (4s)';
+
       try {
-        const result = await window.rpcCluster.scanWorkers();
-        
-        if (result.error) {
-          throw new Error(result.error);
-        }
-        
+        var result = await window.rpcCluster.scanWorkers();
+        if (result.error) throw new Error(result.error);
         state.workers = result.map(w => ({ ...w, enabled: true }));
         renderWorkers();
       } catch (err) {
@@ -1336,96 +1775,96 @@
       }
     }
 
-    // List models
-    async function listModels() {
-      const btn = document.getElementById('browse-models-btn');
-      btn.disabled = true;
-      btn.textContent = 'Scanning…';
-      
-      try {
-        const models = await window.rpcCluster.listModels();
-        renderModels(models);
-      } catch (err) {
-        console.error('List models failed:', err);
-        renderModels([]);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Browse models';
-      }
-    }
+    // --- Save config ---
 
-    // Save config
     async function saveConfig() {
-      const btn = document.getElementById('save-btn');
-      const errorEl = document.getElementById('save-error');
-      const successEl = document.getElementById('save-success');
-      const testBtn = document.getElementById('test-btn');
-      
+      var btn = document.getElementById('save-btn');
+      var errorEl = document.getElementById('save-error');
+      var successEl = document.getElementById('save-success');
+      var testBtn = document.getElementById('test-btn');
+
       btn.disabled = true;
-      btn.textContent = 'Saving…';
+      btn.textContent = 'Saving...';
       errorEl.classList.add('hidden');
       successEl.classList.add('hidden');
-      
+
       try {
-        const result = await window.rpcCluster.saveConfig(buildConfig());
-        
+        var result = await window.rpcCluster.saveConfig(buildConfig());
         if (result.ok) {
           state.configSaved = true;
           btn.classList.remove('btn-primary', 'btn-error');
           btn.classList.add('btn-success');
-          btn.textContent = 'Saved ✓';
+          btn.textContent = 'Saved \u2713';
           successEl.classList.remove('hidden');
           testBtn.classList.remove('hidden');
           document.getElementById('edit-config-btn').classList.remove('hidden');
-          document.getElementById('edit-server-warning').classList.add('hidden');
-          updateServerButton();
         } else {
           throw new Error(result.error);
         }
       } catch (err) {
         btn.classList.remove('btn-primary', 'btn-success');
         btn.classList.add('btn-error');
-        btn.textContent = 'Save failed — see error below';
+        btn.textContent = 'Save failed';
         errorEl.textContent = err.message;
         errorEl.classList.remove('hidden');
         btn.disabled = false;
       }
     }
 
-    // Test cluster
-    async function testCluster() {
-      const btn = document.getElementById('test-btn');
-      const resultEl = document.getElementById('test-result');
-      const titleEl = document.getElementById('test-result-title');
-      const messageEl = document.getElementById('test-result-message');
-      
+    // --- Test all models ---
+
+    async function testAllModels() {
+      var btn = document.getElementById('test-btn');
+      var resultsEl = document.getElementById('test-results');
+
       btn.disabled = true;
-      btn.textContent = 'Testing… (this may take up to 30s)';
-      resultEl.classList.add('hidden');
-      
-      try {
-        const result = await window.rpcCluster.testCluster(buildConfig());
-        
-        resultEl.classList.remove('hidden', 'success', 'error');
-        
-        if (result.ok) {
-          resultEl.classList.add('success');
-          titleEl.textContent = `✓ Cluster responded in ${(result.durationMs / 1000).toFixed(1)}s`;
-          messageEl.textContent = `Response: "${result.response}"`;
-        } else {
-          resultEl.classList.add('error');
-          titleEl.textContent = '✗ Test failed';
-          messageEl.textContent = result.error;
+      btn.textContent = 'Testing...';
+      resultsEl.classList.remove('hidden');
+      resultsEl.innerHTML = '';
+
+      for (var i = 0; i < state.models.length; i++) {
+        var model = state.models[i];
+        var testId = 'test-' + model.id;
+
+        resultsEl.innerHTML += '<div id="' + testId + '" style="padding: 8px 12px; font-size: 13px; color: #aaa; border-left: 3px solid #666; margin-bottom: 6px; border-radius: 0 6px 6px 0; background: #2a2a2a;">' +
+          '<div class="spinner" style="display: inline-block; vertical-align: middle; margin-right: 8px;"></div>' +
+          'Testing ' + escapeHtml(model.name) + ' (:' + model.port + ')...' +
+        '</div>';
+
+        try {
+          var config = {
+            modelPath: model.modelPath,
+            nGpuLayers: model.nGpuLayers,
+            workers: state.workers.filter(w => w.enabled),
+          };
+          var result = await window.rpcCluster.testCluster(config);
+
+          var el = document.getElementById(testId);
+          if (result.ok) {
+            el.style.borderLeftColor = '#4caf50';
+            el.style.background = 'rgba(76,175,80,0.1)';
+            el.innerHTML = '<span style="color: #4caf50;">\u2713</span> ' +
+              escapeHtml(model.name) + ' (:' + model.port + ') \u2014 responded in ' +
+              (result.durationMs / 1000).toFixed(1) + 's: "' + escapeHtml(result.response) + '"';
+          } else {
+            el.style.borderLeftColor = '#f44336';
+            el.style.background = 'rgba(244,67,54,0.1)';
+            el.innerHTML = '<span style="color: #f44336;">\u2717</span> ' +
+              escapeHtml(model.name) + ' (:' + model.port + ') \u2014 ' + escapeHtml(result.error);
+          }
+        } catch (err) {
+          var el2 = document.getElementById(testId);
+          if (el2) {
+            el2.style.borderLeftColor = '#f44336';
+            el2.style.background = 'rgba(244,67,54,0.1)';
+            el2.innerHTML = '<span style="color: #f44336;">\u2717</span> ' +
+              escapeHtml(model.name) + ' (:' + model.port + ') \u2014 ' + escapeHtml(err.message);
+          }
         }
-      } catch (err) {
-        resultEl.classList.remove('hidden', 'success');
-        resultEl.classList.add('error');
-        titleEl.textContent = '✗ Test failed';
-        messageEl.textContent = err.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Test cluster';
       }
+
+      btn.disabled = false;
+      btn.textContent = 'Test all models';
     }
 
     // Open config folder
@@ -1433,181 +1872,69 @@
       await window.rpcCluster.openConfigFolder();
     }
 
-    // Update Step 5 server button state based on configSaved
-    function updateServerButton() {
-      const btn = document.getElementById('server-btn');
-      if (state.serverRunning) {
-        btn.disabled = false;
-        btn.title = '';
-        btn.textContent = 'Stop inference server';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-danger');
-      } else {
-        btn.classList.remove('btn-danger');
-        btn.classList.add('btn-primary');
-        btn.textContent = 'Start inference server';
-        if (state.configSaved) {
-          btn.disabled = false;
-          btn.title = '';
-        } else {
-          btn.disabled = true;
-          btn.title = 'Save configuration first';
-        }
-      }
-    }
-
-    // Show inference server state
-    function showServerState(stateName, data) {
-      const idle = document.getElementById('server-idle');
-      const starting = document.getElementById('server-starting');
-      const running = document.getElementById('server-running');
-      const error = document.getElementById('server-error');
-
-      idle.classList.add('hidden');
-      starting.classList.add('hidden');
-      running.classList.add('hidden');
-      error.classList.add('hidden');
-
-      if (stateName === 'idle') {
-        idle.classList.remove('hidden');
-      } else if (stateName === 'starting') {
-        starting.classList.remove('hidden');
-        const text = document.getElementById('server-starting-text');
-        const workerCount = state.workers.filter(w => w.enabled).length;
-        text.textContent = `Launching llama-server with ${workerCount} worker(s)…`;
-      } else if (stateName === 'running') {
-        running.classList.remove('hidden');
-        document.getElementById('server-model-info').textContent = `Model: ${data.model || 'unknown'}`;
-        const wCount = data.workers || 0;
-        document.getElementById('server-workers-info').textContent = wCount > 0
-          ? `Workers: ${wCount} worker(s) active`
-          : 'Workers: Local only';
-      } else if (stateName === 'error') {
-        error.classList.remove('hidden');
-        document.getElementById('server-error-message').textContent = data.error || 'Unknown error';
-      }
-    }
-
-    // Start inference server
-    async function startServer() {
-      const btn = document.getElementById('server-btn');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner"></div> Starting server…';
-      showServerState('starting');
-
-      try {
-        const result = await window.rpcCluster.startInferenceServer();
-        if (result.ok) {
-          state.serverRunning = true;
-          state.serverUrl = result.url;
-          showServerState('running', { model: result.model, workers: result.workers });
-        } else {
-          state.serverRunning = false;
-          state.serverUrl = null;
-          showServerState('error', { error: result.error });
-        }
-      } catch (err) {
-        state.serverRunning = false;
-        state.serverUrl = null;
-        showServerState('error', { error: err.message });
-      }
-      updateServerButton();
-    }
-
-    // Stop inference server
-    async function stopServer() {
-      const btn = document.getElementById('server-btn');
-      btn.disabled = true;
-      btn.textContent = 'Stopping…';
-
-      try {
-        await window.rpcCluster.stopInferenceServer();
-      } catch (err) {
-        // Ignore errors
-      }
-      state.serverRunning = false;
-      state.serverUrl = null;
-      showServerState('idle');
-      updateServerButton();
-    }
-
-    // Copy to clipboard with feedback
+    // Copy to clipboard
     function copyToClipboard(text, buttonEl) {
       navigator.clipboard.writeText(text).then(() => {
-        const original = buttonEl.textContent;
+        var original = buttonEl.textContent;
         buttonEl.textContent = 'Copied!';
         setTimeout(() => { buttonEl.textContent = original; }, 2000);
-      }).catch(() => {
-        // Fallback: ignore
-      });
+      }).catch(() => {});
     }
 
-    // Edit configuration — exit saved state and allow edits
+    // Edit configuration
     function editConfiguration() {
-      if (state.serverRunning) {
-        document.getElementById('edit-server-warning').classList.remove('hidden');
-        return;
-      }
-      document.getElementById('edit-server-warning').classList.add('hidden');
-
       state.configSaved = false;
-      
-      // Reset save button
-      const saveBtn = document.getElementById('save-btn');
+
+      var saveBtn = document.getElementById('save-btn');
       saveBtn.classList.remove('btn-success', 'btn-error');
       saveBtn.classList.add('btn-primary');
       saveBtn.textContent = 'Save configuration';
       saveBtn.disabled = false;
-      
-      // Hide post-save elements
+
       document.getElementById('save-success').classList.add('hidden');
       document.getElementById('save-error').classList.add('hidden');
       document.getElementById('test-btn').classList.add('hidden');
-      document.getElementById('test-result').classList.add('hidden');
+      document.getElementById('test-results').classList.add('hidden');
       document.getElementById('edit-config-btn').classList.add('hidden');
 
-      // Disable server button
-      updateServerButton();
-      
-      // Scroll to top
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // Reset advanced settings to defaults
+    // Reset defaults
     function resetDefaults() {
       state.nGpuLayers = 99;
       state.maxTokens = 2048;
       state.temperature = 0.7;
       state.discoveryTimeoutMs = 4000;
-      
+
       document.getElementById('gpu-layers-input').value = 99;
       document.getElementById('max-tokens-input').value = 2048;
       document.getElementById('temperature-input').value = 0.7;
       document.getElementById('discovery-ms-input').value = 4000;
-      
+
       updateSummary();
     }
 
-    // Clear all state and start over
+    // Clear all
     function clearAllState() {
       state.workers = [];
-      state.modelPath = '';
+      state.models = [];
+      state.serverStatuses = {};
+      state.serverErrors = {};
+      state.serverUrls = {};
       state.nGpuLayers = 99;
       state.maxTokens = 2048;
       state.temperature = 0.7;
       state.discoveryTimeoutMs = 4000;
       state.configSaved = false;
-      state.serverRunning = false;
-      state.serverUrl = null;
-      
-      // Clear form inputs
-      document.getElementById('model-path-input').value = '';
+      state.editingModelId = null;
+
       document.getElementById('gpu-layers-input').value = 99;
       document.getElementById('max-tokens-input').value = 2048;
       document.getElementById('temperature-input').value = 0.7;
       document.getElementById('discovery-ms-input').value = 4000;
-      
-      // Reset workers display
+
+      // Reset workers
       document.getElementById('workers-container').classList.add('hidden');
       document.getElementById('no-workers-warning').classList.add('hidden');
       document.getElementById('rescan-btn').classList.add('hidden');
@@ -1615,102 +1942,72 @@
       document.getElementById('manual-worker-form').classList.add('hidden');
       document.getElementById('clear-confirm').classList.add('hidden');
 
-      // Reset models display
-      document.getElementById('models-container').classList.add('hidden');
-      document.getElementById('no-models-info').classList.add('hidden');
-      
-      // Reset save button
-      const saveBtn = document.getElementById('save-btn');
+      // Reset save state
+      var saveBtn = document.getElementById('save-btn');
       saveBtn.classList.remove('btn-success', 'btn-error');
       saveBtn.classList.add('btn-primary');
       saveBtn.textContent = 'Save configuration';
       saveBtn.disabled = false;
-      
-      // Hide post-save elements
+
       document.getElementById('save-success').classList.add('hidden');
       document.getElementById('save-error').classList.add('hidden');
       document.getElementById('test-btn').classList.add('hidden');
-      document.getElementById('test-result').classList.add('hidden');
+      document.getElementById('test-results').classList.add('hidden');
       document.getElementById('edit-config-btn').classList.add('hidden');
-      document.getElementById('edit-server-warning').classList.add('hidden');
 
-      // Reset server state to idle
-      showServerState('idle');
-      updateServerButton();
+      hideModelForm();
+      renderModelCards();
       updateSummary();
     }
 
     // Initialize
     async function init() {
-      // Display config path
       document.getElementById('config-path').textContent = getConfigPath();
-      
-      // Load existing config
-      const config = await window.rpcCluster.loadConfig();
+
+      // Load config (v2 with migration)
+      var config = await window.rpcCluster.loadConfig();
       if (config) {
-        state.modelPath = config.modelPath || '';
-        state.nGpuLayers = config.nGpuLayers ?? 99;
-        state.maxTokens = config.maxTokens ?? 2048;
-        state.temperature = config.temperature ?? 0.7;
-        state.discoveryTimeoutMs = config.discoveryTimeoutMs ?? 4000;
         state.workers = config.workers || [];
-        state.configSaved = true;
-        
-        // Update form inputs
-        document.getElementById('model-path-input').value = state.modelPath;
-        document.getElementById('gpu-layers-input').value = state.nGpuLayers;
-        document.getElementById('max-tokens-input').value = state.maxTokens;
-        document.getElementById('temperature-input').value = state.temperature;
-        document.getElementById('discovery-ms-input').value = state.discoveryTimeoutMs;
-        
-        // Show workers if any
+        state.models = config.models || [];
+        state.discoveryTimeoutMs = config.discoveryTimeoutMs ?? 4000;
+
+        // Reset all statuses on load
+        state.models.forEach(m => {
+          state.serverStatuses[m.id] = 'stopped';
+        });
+
+        // If workers exist, show them
         if (state.workers.length > 0) {
           renderWorkers();
         }
-        
-        // Show save success state and test button
-        const saveBtn = document.getElementById('save-btn');
-        saveBtn.classList.remove('btn-primary');
-        saveBtn.classList.add('btn-success');
-        saveBtn.textContent = 'Saved ✓';
-        document.getElementById('save-success').classList.remove('hidden');
-        document.getElementById('test-btn').classList.remove('hidden');
-        document.getElementById('edit-config-btn').classList.remove('hidden');
-        
-        // Enable server button since config is saved
-        updateServerButton();
+
+        // If config was previously saved (has workers or models)
+        if (state.workers.length > 0 || state.models.length > 0) {
+          state.configSaved = true;
+          var saveBtn = document.getElementById('save-btn');
+          saveBtn.classList.remove('btn-primary');
+          saveBtn.classList.add('btn-success');
+          saveBtn.textContent = 'Saved \u2713';
+          document.getElementById('save-success').classList.remove('hidden');
+          document.getElementById('test-btn').classList.remove('hidden');
+          document.getElementById('edit-config-btn').classList.remove('hidden');
+        }
       }
-      
+
+      renderModelCards();
       updateSummary();
 
-      // Check if inference server is already running
-      try {
-        const serverStatus = await window.rpcCluster.getInferenceServerStatus();
-        if (serverStatus.running) {
-          state.serverRunning = true;
-          state.serverUrl = serverStatus.url;
-          const modelFile = state.modelPath ? state.modelPath.split(/[/\\]/).pop() : 'unknown';
-          const workerCount = state.workers.filter(w => w.enabled).length;
-          showServerState('running', { model: modelFile, workers: workerCount });
-          updateServerButton();
-        }
-      } catch (err) {
-        // Ignore — server status check is non-critical
-      }
-
-      // Step 0: auto-detect host hardware on load
+      // Step 0: auto-detect hardware
       detectHostHardware();
-      
-      // Event listeners
-      document.getElementById('scan-btn').addEventListener('click', scanWorkers);
-      document.getElementById('rescan-btn').addEventListener('click', scanWorkers);
 
-      // Step 0: hardware detection
+      // --- Event listeners ---
+
+      // Step 0
       document.getElementById('get-download-btn').addEventListener('click', getDownloadLink);
       document.getElementById('install-auto-btn').addEventListener('click', installAutomatically);
       document.getElementById('download-manual-link').addEventListener('click', (e) => {
         e.preventDefault();
-        const url = e.target.dataset.url || 'https://github.com/ggml-org/llama.cpp/releases/latest';
+        var url = e.target.dataset.url || 'https://github.com/ggml-org/llama.cpp/releases/latest';
         window.rpcCluster.openExternalUrl(url);
       });
       document.getElementById('restart-btn').addEventListener('click', () => {
@@ -1725,113 +2022,89 @@
         e.preventDefault();
         window.rpcCluster.openExternalUrl('https://github.com/ggml-org/llama.cpp/releases/latest');
       });
-
-      // Reinstall / repair buttons
       document.getElementById('reinstall-btn').addEventListener('click', enterRepairMode);
       document.getElementById('reinstall-btn-prominent').addEventListener('click', enterRepairMode);
 
-      // Manual worker entry
+      // Step 1: Workers
+      document.getElementById('scan-btn').addEventListener('click', scanWorkers);
+      document.getElementById('rescan-btn').addEventListener('click', scanWorkers);
       document.getElementById('add-manual-worker-btn').addEventListener('click', () => {
-        const ipInput = document.getElementById('manual-worker-ip');
-        const portInput = document.getElementById('manual-worker-port');
-        const hostnameInput = document.getElementById('manual-worker-hostname');
-
-        const ip = ipInput.value.trim();
-        if (!ip) {
-          ipInput.focus();
-          return;
-        }
-
-        const port = parseInt(portInput.value, 10) || 50052;
-        const hostname = hostnameInput.value.trim() || ip;
-
-        state.workers.push({
-          hostname: hostname,
-          ip: ip,
-          port: port,
-          vramGB: 0,
-          platform: 'unknown',
-          enabled: true
-        });
-
+        var ipInput = document.getElementById('manual-worker-ip');
+        var portInput = document.getElementById('manual-worker-port');
+        var hostnameInput = document.getElementById('manual-worker-hostname');
+        var ip = ipInput.value.trim();
+        if (!ip) { ipInput.focus(); return; }
+        var port = parseInt(portInput.value, 10) || 50052;
+        var hostname = hostnameInput.value.trim() || ip;
+        state.workers.push({ hostname: hostname, ip: ip, port: port, vramGB: 0, platform: 'unknown', enabled: true });
         ipInput.value = '';
         hostnameInput.value = '';
         portInput.value = '50052';
-
         renderWorkers();
       });
-      document.getElementById('browse-models-btn').addEventListener('click', listModels);
-      document.getElementById('refresh-models-btn').addEventListener('click', listModels);
-      document.getElementById('save-btn').addEventListener('click', saveConfig);
-      document.getElementById('edit-config-btn').addEventListener('click', editConfiguration);
-      document.getElementById('test-btn').addEventListener('click', testCluster);
-      document.getElementById('reset-defaults-btn').addEventListener('click', resetDefaults);
 
-      // Clear all — inline confirmation
-      document.getElementById('clear-all-btn').addEventListener('click', () => {
-        document.getElementById('clear-confirm').classList.remove('hidden');
-      });
-      document.getElementById('clear-confirm-yes').addEventListener('click', () => {
-        clearAllState();
-      });
-      document.getElementById('clear-confirm-no').addEventListener('click', () => {
-        document.getElementById('clear-confirm').classList.add('hidden');
-      });
-      document.getElementById('open-folder-link').addEventListener('click', openConfigFolder);
-      document.getElementById('footer-open-folder').addEventListener('click', openConfigFolder);
-      
-      // Step 5: server button
-      document.getElementById('server-btn').addEventListener('click', () => {
-        if (state.serverRunning) {
-          stopServer();
-        } else {
-          startServer();
+      // Step 2: Model management
+      document.getElementById('show-add-model-btn').addEventListener('click', () => showModelForm(null));
+      document.getElementById('mf-submit-btn').addEventListener('click', submitModelForm);
+      document.getElementById('mf-cancel-btn').addEventListener('click', hideModelForm);
+      document.getElementById('mf-browse-btn').addEventListener('click', browseModelsForForm);
+      // Auto-fill name from path
+      document.getElementById('mf-path').addEventListener('input', (e) => {
+        var nameInput = document.getElementById('mf-name');
+        if (!nameInput.value.trim() || nameInput.dataset.autoFilled === 'true') {
+          var basename = pathBasename(e.target.value).replace(/\.gguf$/i, '');
+          if (basename) {
+            nameInput.value = basename;
+            nameInput.dataset.autoFilled = 'true';
+          }
         }
       });
-      document.getElementById('copy-url-btn').addEventListener('click', (e) => {
-        copyToClipboard('http://localhost:18080/v1', e.target);
+      document.getElementById('mf-name').addEventListener('input', () => {
+        document.getElementById('mf-name').dataset.autoFilled = 'false';
       });
-      document.getElementById('copy-curl-btn').addEventListener('click', (e) => {
-        copyToClipboard(document.getElementById('curl-block').textContent, e.target);
-      });
-      
-      // Model path input — sanitize and deselect radio buttons
-      document.getElementById('model-path-input').addEventListener('input', (e) => {
-        state.modelPath = sanitizeModelPath(e.target.value);
-        e.target.value = state.modelPath;
-        // Deselect any radio button in the model list
-        document.querySelectorAll('#models-list input[type="radio"]').forEach(r => { r.checked = false; });
-        document.querySelectorAll('#models-list .model-item').forEach(el => { el.classList.remove('selected'); });
-        updateSummary();
-      });
-      
-      // Settings inputs
+
+      // Step 3: Advanced settings (defaults for new models)
       document.getElementById('gpu-layers-input').addEventListener('change', (e) => {
         state.nGpuLayers = parseInt(e.target.value) || 99;
-        updateSummary();
       });
-      
       document.getElementById('max-tokens-input').addEventListener('change', (e) => {
         state.maxTokens = parseInt(e.target.value) || 2048;
-        updateSummary();
       });
-      
       document.getElementById('temperature-input').addEventListener('change', (e) => {
         state.temperature = parseFloat(e.target.value) || 0.7;
-        updateSummary();
       });
-      
       document.getElementById('discovery-ms-input').addEventListener('change', (e) => {
         state.discoveryTimeoutMs = parseInt(e.target.value) || 4000;
       });
-      
-      // Advanced toggle
       document.getElementById('advanced-toggle').addEventListener('click', () => {
-        const content = document.getElementById('advanced-content');
-        const arrow = document.getElementById('advanced-arrow');
-        const isExpanded = content.classList.toggle('expanded');
-        arrow.textContent = isExpanded ? '▼' : '▶';
+        var content = document.getElementById('advanced-content');
+        var arrow = document.getElementById('advanced-arrow');
+        var isExpanded = content.classList.toggle('expanded');
+        arrow.textContent = isExpanded ? '\u25BC' : '\u25B6';
       });
+      document.getElementById('reset-defaults-btn').addEventListener('click', resetDefaults);
+
+      // Step 4: Save & test
+      document.getElementById('save-btn').addEventListener('click', saveConfig);
+      document.getElementById('edit-config-btn').addEventListener('click', editConfiguration);
+      document.getElementById('test-btn').addEventListener('click', testAllModels);
+
+      // Clear all
+      document.getElementById('clear-all-btn').addEventListener('click', () => {
+        document.getElementById('clear-confirm').classList.remove('hidden');
+      });
+      document.getElementById('clear-confirm-yes').addEventListener('click', clearAllState);
+      document.getElementById('clear-confirm-no').addEventListener('click', () => {
+        document.getElementById('clear-confirm').classList.add('hidden');
+      });
+
+      // Folder links
+      document.getElementById('open-folder-link').addEventListener('click', openConfigFolder);
+      document.getElementById('footer-open-folder').addEventListener('click', openConfigFolder);
+
+      // Step 5: Global controls
+      document.getElementById('start-all-btn').addEventListener('click', startAllModels);
+      document.getElementById('stop-all-btn').addEventListener('click', stopAllModels);
     }
 
     // Start
