@@ -5,7 +5,7 @@ import * as path from 'path';
 // Mock fs module
 vi.mock('fs');
 
-import { loadConfig, saveConfig, formatDiscoveredWorkers, getConfigPath, CONFIG_PATH, DEFAULT_CONFIG } from '../config';
+import { loadConfig, saveConfig, formatDiscoveredWorkers, getConfigPath, CONFIG_PATH, DEFAULT_CONFIG } from '../config.js';
 
 describe('loadConfig', () => {
   beforeEach(() => {

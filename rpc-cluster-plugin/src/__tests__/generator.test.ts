@@ -31,12 +31,12 @@ vi.mock('../utils', async (importOriginal) => {
 });
 
 import { spawn } from 'child_process';
-import { discoverWorkers, buildRpcArgument } from '../discovery';
-import { loadConfig, formatDiscoveredWorkers } from '../config';
-import { waitForPort, commandExists, isPortInUse } from '../utils';
+import { discoverWorkers, buildRpcArgument } from '../discovery.js';
+import { loadConfig, formatDiscoveredWorkers } from '../config.js';
+import { waitForPort, commandExists, isPortInUse } from '../utils.js';
 
 // Import after mocking
-import { generate, GeneratorController } from '../generator';
+import { generate, GeneratorController } from '../generator.js';
 
 describe('generate', () => {
   let mockCtl: GeneratorController;

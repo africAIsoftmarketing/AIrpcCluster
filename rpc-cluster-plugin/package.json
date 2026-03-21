@@ -6,7 +6,7 @@
   "main": "dist/generator.js",
   "scripts": {
     "dev": "lms dev",
-    "build": "lms build",
+    "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

@@ -3,7 +3,7 @@ import * as net from 'net';
 import { EventEmitter } from 'events';
 
 // Import functions to test
-import { waitForPort, getLocalIP, toOpenAIMessages, isPortInUse } from '../utils';
+import { waitForPort, getLocalIP, toOpenAIMessages, isPortInUse } from '../utils.js';
 
 describe('waitForPort', () => {
   it('should resolve when port becomes available', async () => {

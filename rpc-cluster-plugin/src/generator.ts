@@ -1,8 +1,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import OpenAI from 'openai';
-import { discoverWorkers, buildRpcArgument, Worker } from './discovery';
-import { loadConfig, formatDiscoveredWorkers, Config } from './config';
-import { waitForPort, toOpenAIMessages, commandExists, isPortInUse, Chat } from './utils';
+import { discoverWorkers, buildRpcArgument, Worker } from './discovery.js';
+import { loadConfig, formatDiscoveredWorkers, Config } from './config.js';
+import { waitForPort, toOpenAIMessages, commandExists, isPortInUse, Chat } from './utils.js';
 
 /**
  * LM Studio Generator Controller interface (simplified)

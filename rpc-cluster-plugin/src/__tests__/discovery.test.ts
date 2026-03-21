@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 vi.mock('dgram');
 
 // Import after mocking
-import { discoverWorkers, buildRpcArgument, DISCOVERY_PORT } from '../discovery';
+import { discoverWorkers, buildRpcArgument, DISCOVERY_PORT } from '../discovery.js';
 
 describe('discoverWorkers', () => {
   let mockSocket: EventEmitter & {
