@@ -1,10 +1,10 @@
 # RPC Cluster - Distributed llama.cpp Inference
 # Makefile for building all components
 
-.PHONY: all plugin beacon configurator configurator-mac configurator-win configurator-dev installer-win installer-macos clean dev test help
+.PHONY: all plugin beacon configurator configurator-mac configurator-win configurator-dev installer-win installer-macos android android-release clean dev test help
 
 # Default target
-all: plugin beacon configurator configurator-mac configurator-win
+all: plugin beacon configurator configurator-mac configurator-win android
 
 # Help target
 help:
@@ -16,9 +16,11 @@ help:
 	@echo "  make configurator-mac  - Build Configurator macOS DMG"
 	@echo "  make configurator-win  - Build Configurator Windows installer"
 	@echo "  make configurator-dev  - Run Configurator in development mode"
+	@echo "  make android           - Build Android worker debug APK"
+	@echo "  make android-release   - Build Android worker release APK"
 	@echo "  make installer-win     - Build Windows worker installer (requires Windows + Inno Setup)"
 	@echo "  make installer-macos   - Build macOS worker installer (requires macOS)"
-	@echo "  make all               - Build plugin, beacon, configurator, and configurator distributables"
+	@echo "  make all               - Build plugin, beacon, configurator, distributables, and Android APK"
 	@echo "  make test              - Run plugin tests"
 	@echo "  make dev               - Run plugin in development mode"
 	@echo "  make dev-config        - Run configurator in development mode"
@@ -27,6 +29,7 @@ help:
 	@echo "Note: Installer targets require platform-specific tools:"
 	@echo "  - Windows: Inno Setup 6 (choco install innosetup)"
 	@echo "  - macOS: Xcode Command Line Tools (xcode-select --install)"
+	@echo "  - Android: Android Studio + NDK 26+ + CMake 3.22+"
 
 # Build the LM Studio plugin
 plugin:
@@ -75,6 +78,16 @@ configurator-mac:
 configurator-win:
 	@echo "=== Building Configurator Windows Installer ==="
 	cd configurator && npm run build:win
+
+# Build Android worker debug APK
+android:
+	@echo "=== Building Android Worker APK (debug) ==="
+	cd android-worker && ./gradlew assembleDebug --no-daemon
+
+# Build Android worker release APK
+android-release:
+	@echo "=== Building Android Worker APK (release) ==="
+	cd android-worker && ./gradlew assembleRelease --no-daemon
 
 # Build Windows installer (must run on Windows)
 installer-win:
