@@ -41,7 +41,7 @@ Distribute LLM inference across multiple laptops on your local network using lla
 - A `.gguf` model file
 
 ### Worker Machines
-- Windows 10/11 (64-bit) or macOS 13+ (Ventura) or Linux (Ubuntu 20.04+, 64-bit)
+- Windows 10/11 (64-bit) or macOS 13+ (Ventura) or Linux (Ubuntu 20.04+, 64-bit) or Android 8.0+ (ARM64)
 - No additional software required - the installer handles everything
 
 ## Quick Start
@@ -289,6 +289,14 @@ rpc-cluster/
 │   ├── package.json
 │   └── tsconfig.json
 │
+├── android-worker/              # Android worker app (Kotlin/Compose)
+│   ├── app/
+│   │   ├── src/main/
+│   │   │   ├── cpp/            # JNI wrapper + CMake (llama.cpp NDK)
+│   │   │   ├── java/.../       # Kotlin sources
+│   │   │   └── res/            # Android resources
+│   │   └── build.gradle
+│   └── README-android.md
 ├── configurator/               # Electron configurator app
 │   ├── main.js                 # Main process
 │   ├── preload.js              # Preload script
