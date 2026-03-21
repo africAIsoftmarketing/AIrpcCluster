@@ -115,7 +115,12 @@ function discoverWorkers(timeoutMs = 4000) {
           return;
         }
         
-        const workerIp = payload.ip || rinfo.address;
+        // Use rinfo.address as authoritative IP source —
+        // the payload.ip may be wrong if the worker has
+        // multiple interfaces or reports 127.0.0.1
+        const workerIp = (payload.ip && payload.ip !== '127.0.0.1')
+          ? payload.ip
+          : rinfo.address;
         
         if (!workers.has(workerIp)) {
           const worker = {
@@ -127,24 +132,22 @@ function discoverWorkers(timeoutMs = 4000) {
             enabled: true
           };
           workers.set(workerIp, worker);
-          console.log(`[discovery] Found worker: ${worker.hostname} at ${worker.ip}:${worker.port} (${worker.vramGB}GB VRAM)`);
+          console.log(`[discovery] Found: ${worker.hostname} @ ${workerIp}:${worker.port} (${worker.vramGB}GB VRAM)`);
         }
       } catch (err) {
         // Silently ignore malformed packets
       }
     });
     
-    socket.on('listening', () => {
-      try {
-        socket.setBroadcast(true);
-        console.log(`[discovery] Listening for workers on port ${DISCOVERY_PORT}`);
-      } catch (err) {
-        console.error('[discovery] Failed to enable broadcast:', err);
-      }
-    });
-    
     try {
-      socket.bind(DISCOVERY_PORT);
+      socket.bind(DISCOVERY_PORT, '0.0.0.0', () => {
+        try {
+          socket.setBroadcast(true);
+          console.log(`[discovery] Listening on 0.0.0.0:${DISCOVERY_PORT}`);
+        } catch (err) {
+          console.error('[discovery] Failed to enable broadcast:', err);
+        }
+      });
     } catch (err) {
       console.error('[discovery] Failed to bind to port:', err);
       clearTimeout(timeoutId);

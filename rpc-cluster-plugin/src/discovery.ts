@@ -95,7 +95,7 @@ export function discoverWorkers(timeoutMs: number = 4000): Promise<Worker[]> {
       resolve(Array.from(workers.values()).sort((a, b) => b.vramGB - a.vramGB));
     });
     
-    socket.on('message', (msg, rinfo) => {
+    socket.on('message', (msg: Buffer, rinfo: dgram.RemoteInfo) => {
       try {
         const payloadStr = msg.toString('utf-8');
         const payload = JSON.parse(payloadStr);
@@ -104,7 +104,12 @@ export function discoverWorkers(timeoutMs: number = 4000): Promise<Worker[]> {
           return;
         }
         
-        const workerIp = payload.ip || rinfo.address;
+        // Use rinfo.address as authoritative IP source —
+        // the payload.ip may be wrong if the worker has
+        // multiple interfaces or reports 127.0.0.1
+        const workerIp = (payload.ip && payload.ip !== '127.0.0.1')
+          ? payload.ip
+          : rinfo.address;
         
         if (!workers.has(workerIp)) {
           const worker: Worker = {
@@ -115,26 +120,22 @@ export function discoverWorkers(timeoutMs: number = 4000): Promise<Worker[]> {
             platform: payload.platform
           };
           workers.set(workerIp, worker);
-          console.log(`[discovery] Found worker: ${worker.hostname} at ${worker.ip}:${worker.port} (${worker.vramGB}GB VRAM)`);
+          console.log(`[discovery] Found: ${worker.hostname} @ ${workerIp}:${worker.port} (${worker.vramGB}GB VRAM)`);
         }
       } catch (err) {
-        // Silently ignore malformed packets - this is expected
-        // as other UDP traffic may be received on this port
-      }
-    });
-    
-    socket.on('listening', () => {
-      try {
-        socket?.setBroadcast(true);
-        const addr = socket?.address();
-        console.log(`[discovery] Listening for workers on port ${addr?.port}`);
-      } catch (err) {
-        console.error('[discovery] Failed to enable broadcast:', err);
+        // Silently ignore malformed packets
       }
     });
     
     try {
-      socket.bind(DISCOVERY_PORT);
+      socket.bind(DISCOVERY_PORT, '0.0.0.0', () => {
+        try {
+          socket?.setBroadcast(true);
+          console.log(`[discovery] Listening on 0.0.0.0:${DISCOVERY_PORT}`);
+        } catch (err) {
+          console.error('[discovery] Failed to enable broadcast:', err);
+        }
+      });
     } catch (err) {
       console.error('[discovery] Failed to bind to port:', err);
       clearTimeout(timeoutId);

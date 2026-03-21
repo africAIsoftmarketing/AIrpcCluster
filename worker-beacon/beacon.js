@@ -17,7 +17,45 @@ const { execSync } = require('child_process');
 const BROADCAST_PORT = 5005;
 const RPC_SERVER_PORT = 50052;
 const BROADCAST_INTERVAL_MS = 3000;
-const BROADCAST_ADDRESS = '255.255.255.255';
+
+/**
+ * Computes the directed broadcast address for the local network.
+ * e.g. IP=192.168.1.42, mask=255.255.255.0 -> 192.168.1.255
+ * Falls back to 255.255.255.255 if computation fails.
+ */
+function getDirectedBroadcastAddress() {
+  const interfaces = os.networkInterfaces();
+
+  for (const name of Object.keys(interfaces)) {
+    const addrs = interfaces[name];
+    if (!addrs) continue;
+
+    for (const addr of addrs) {
+      if (addr.family !== 'IPv4' || addr.internal) continue;
+
+      try {
+        const ipParts   = addr.address.split('.').map(Number);
+        const maskParts = addr.netmask.split('.').map(Number);
+
+        const broadcastParts = ipParts.map(
+          (octet, i) => (octet | (~maskParts[i] & 0xff))
+        );
+
+        const broadcast = broadcastParts.join('.');
+
+        // Skip if it resolves to loopback broadcast
+        if (broadcast === '0.0.0.255') continue;
+
+        return broadcast;
+      } catch (e) {
+        continue;
+      }
+    }
+  }
+
+  // Fallback
+  return '255.255.255.255';
+}
 
 /**
  * Get the first non-loopback IPv4 address
@@ -247,7 +285,8 @@ function startBeacon() {
     console.log(`[beacon]   RPC Port: ${RPC_SERVER_PORT}`);
     console.log(`[beacon]   VRAM: ${vramGB > 0 ? vramGB + ' GB' : 'CPU only'}`);
     console.log(`[beacon]   Platform: ${process.platform}`);
-    console.log(`[beacon] Broadcasting to ${BROADCAST_ADDRESS}:${BROADCAST_PORT} every ${BROADCAST_INTERVAL_MS}ms`);
+    console.log(`[beacon]   Broadcast address: ${getDirectedBroadcastAddress()}`);
+    console.log(`[beacon] Broadcasting to port ${BROADCAST_PORT} every ${BROADCAST_INTERVAL_MS}ms`);
     
     // Send initial beacon
     sendBeacon();
@@ -259,11 +298,18 @@ function startBeacon() {
   function sendBeacon() {
     const payload = buildBeaconPayload();
     const message = Buffer.from(payload, 'utf-8');
-    
-    socket.send(message, 0, message.length, BROADCAST_PORT, BROADCAST_ADDRESS, (err) => {
-      if (err) {
-        console.error('[beacon] Failed to send beacon:', err.message);
-      }
+
+    // Send to directed broadcast (passes through most Wi-Fi routers)
+    const directedBroadcast = getDirectedBroadcastAddress();
+    socket.send(Buffer.from(payload), 0, message.length,
+      BROADCAST_PORT, directedBroadcast, (err) => {
+      if (err) console.error('[beacon] Directed broadcast failed:', err.message);
+    });
+
+    // Also send to limited broadcast as fallback
+    socket.send(Buffer.from(payload), 0, message.length,
+      BROADCAST_PORT, '255.255.255.255', (err) => {
+      if (err) console.error('[beacon] Limited broadcast failed:', err.message);
     });
   }
 }

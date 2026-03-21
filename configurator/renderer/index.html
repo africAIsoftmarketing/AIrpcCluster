@@ -617,7 +617,43 @@
       </div>
       
       <div id="no-workers-warning" class="warning-box hidden">
-        No workers detected. Ensure the RPC Cluster Worker app is installed and running on the other laptops. You can continue in local-only mode.
+        <div id="no-workers-diagnostic">
+          <strong>No workers detected</strong> after scan.<br><br>
+          <strong>Common causes on Wi-Fi networks:</strong>
+          <ul style="margin: 8px 0 0 20px; line-height: 1.8; font-size: 13px;">
+            <li>The worker service may not be running on the other laptop<br>
+              <span style="color: #888;">Windows: open Services, check "LlamaRPCBeacon" is Running</span><br>
+              <span style="color: #888;">macOS: run: <code>sudo launchctl list | grep rpccluster</code></span><br>
+              <span style="color: #888;">Linux: run: <code>systemctl status rpc-cluster-beacon</code></span></li>
+            <li>Your router may block device-to-device UDP traffic<br>
+              <span style="color: #888;">Try connecting both laptops via Ethernet instead</span></li>
+            <li>Windows Firewall may be blocking UDP port 5005 on the worker<br>
+              <span style="color: #888;">Run on the worker: <code>netsh advfirewall firewall add rule name="RPC Beacon" dir=in action=allow protocol=UDP localport=5005</code></span></li>
+            <li>The worker beacon may be sending to the wrong IP<br>
+              <span style="color: #888;">On the worker, run: <code>node worker-beacon/beacon.js</code><br>Look for: "Broadcast address: 192.168.x.255" — must match your subnet</span></li>
+          </ul>
+          <p style="margin-top: 12px; font-size: 13px;">You can also add workers manually using the form below.</p>
+        </div>
+      </div>
+
+      <!-- Manual worker entry -->
+      <div id="manual-worker-form" class="hidden" style="background: #1e1e2e; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-top: 12px;">
+        <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px; color: #e8e8e8;">Add worker manually</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+          <div style="flex: 2; min-width: 140px;">
+            <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Worker IP address</label>
+            <input id="manual-worker-ip" type="text" placeholder="192.168.1.x" class="input" style="width: 100%;">
+          </div>
+          <div style="flex: 1; min-width: 80px;">
+            <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Port</label>
+            <input id="manual-worker-port" type="number" value="50052" class="input" style="width: 100%;">
+          </div>
+          <div style="flex: 2; min-width: 120px;">
+            <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Hostname (optional)</label>
+            <input id="manual-worker-hostname" type="text" placeholder="My Laptop" class="input" style="width: 100%;">
+          </div>
+          <button id="add-manual-worker-btn" class="btn btn-secondary" style="height: 38px; white-space: nowrap;">Add worker</button>
+        </div>
       </div>
       
       <div class="btn-row">
@@ -885,8 +921,10 @@
       const tbody = document.getElementById('workers-tbody');
       const warning = document.getElementById('no-workers-warning');
       const rescanBtn = document.getElementById('rescan-btn');
+      const manualForm = document.getElementById('manual-worker-form');
       
       rescanBtn.classList.remove('hidden');
+      manualForm.classList.remove('hidden');
       
       if (state.workers.length === 0) {
         container.classList.add('hidden');
@@ -1256,6 +1294,37 @@
       // Event listeners
       document.getElementById('scan-btn').addEventListener('click', scanWorkers);
       document.getElementById('rescan-btn').addEventListener('click', scanWorkers);
+
+      // Manual worker entry
+      document.getElementById('add-manual-worker-btn').addEventListener('click', () => {
+        const ipInput = document.getElementById('manual-worker-ip');
+        const portInput = document.getElementById('manual-worker-port');
+        const hostnameInput = document.getElementById('manual-worker-hostname');
+
+        const ip = ipInput.value.trim();
+        if (!ip) {
+          ipInput.focus();
+          return;
+        }
+
+        const port = parseInt(portInput.value, 10) || 50052;
+        const hostname = hostnameInput.value.trim() || ip;
+
+        state.workers.push({
+          hostname: hostname,
+          ip: ip,
+          port: port,
+          vramGB: 0,
+          platform: 'unknown',
+          enabled: true
+        });
+
+        ipInput.value = '';
+        hostnameInput.value = '';
+        portInput.value = '50052';
+
+        renderWorkers();
+      });
       document.getElementById('browse-models-btn').addEventListener('click', listModels);
       document.getElementById('refresh-models-btn').addEventListener('click', listModels);
       document.getElementById('save-btn').addEventListener('click', saveConfig);
