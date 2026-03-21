@@ -7,6 +7,7 @@ const net = require('net');
 const { discoverWorkers, CONFIG_PATH } = require('./shared/discovery');
 
 let mainWindow = null;
+let inferenceServerProcess = null;
 
 /**
  * Get LM Studio models directory based on platform
@@ -128,6 +129,17 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  if (inferenceServerProcess) {
+    try {
+      inferenceServerProcess.kill('SIGTERM');
+    } catch (e) {
+      // Ignore kill errors
+    }
+    inferenceServerProcess = null;
   }
 });
 
@@ -294,5 +306,156 @@ ipcMain.handle('test-cluster', async (event, config) => {
         // Ignore kill errors
       }
     }
+  }
+});
+
+
+/**
+ * Load config from disk (shared helper for inference server)
+ */
+function loadConfig() {
+  if (!fs.existsSync(CONFIG_PATH)) {
+    return null;
+  }
+  const content = fs.readFileSync(CONFIG_PATH, 'utf-8');
+  return JSON.parse(content);
+}
+
+ipcMain.handle('start-inference-server', async () => {
+  try {
+    // Kill existing process if any
+    if (inferenceServerProcess) {
+      try {
+        inferenceServerProcess.kill('SIGTERM');
+      } catch (e) {
+        // Ignore
+      }
+      inferenceServerProcess = null;
+    }
+
+    const config = loadConfig();
+    if (!config || !config.modelPath || typeof config.modelPath !== 'string' || config.modelPath.trim() === '') {
+      return {
+        ok: false,
+        error: 'Model path is not set or file does not exist. Configure a model in the Configurator first.'
+      };
+    }
+
+    if (!fs.existsSync(config.modelPath)) {
+      return {
+        ok: false,
+        error: 'Model path is not set or file does not exist. Configure a model in the Configurator first.'
+      };
+    }
+
+    const args = [
+      '-m', config.modelPath,
+      '--port', '18080',
+      '-ngl', String(config.nGpuLayers || 99),
+      '--log-disable',
+    ];
+
+    const enabledWorkers = (config.workers || []).filter(w => w.enabled);
+    if (enabledWorkers.length > 0) {
+      args.push('--rpc', enabledWorkers.map(w => `${w.ip}:${w.port}`).join(','));
+    }
+
+    try {
+      inferenceServerProcess = spawn('llama-server', args, {
+        stdio: 'ignore',
+        detached: false
+      });
+    } catch (err) {
+      inferenceServerProcess = null;
+      if (err.code === 'ENOENT') {
+        return {
+          ok: false,
+          error: 'llama-server not found in PATH. Install llama.cpp from https://github.com/ggml-org/llama.cpp/releases and ensure llama-server is accessible from your terminal.'
+        };
+      }
+      throw err;
+    }
+
+    // Handle spawn errors (ENOENT fires asynchronously on some platforms)
+    let spawnError = null;
+    inferenceServerProcess.on('error', (err) => {
+      spawnError = err;
+    });
+
+    inferenceServerProcess.on('exit', () => {
+      inferenceServerProcess = null;
+    });
+
+    // Wait for port 18080 to become ready
+    try {
+      await waitForPort(18080, 30000);
+    } catch (err) {
+      // Cleanup on timeout
+      try {
+        if (inferenceServerProcess) {
+          inferenceServerProcess.kill('SIGTERM');
+        }
+      } catch (e) {
+        // Ignore
+      }
+      inferenceServerProcess = null;
+
+      if (spawnError && spawnError.code === 'ENOENT') {
+        return {
+          ok: false,
+          error: 'llama-server not found in PATH. Install llama.cpp from https://github.com/ggml-org/llama.cpp/releases and ensure llama-server is accessible from your terminal.'
+        };
+      }
+      return {
+        ok: false,
+        error: 'llama-server did not start within 30 seconds. Check that llama-server is in PATH and the model path is valid.'
+      };
+    }
+
+    return {
+      ok: true,
+      url: 'http://localhost:18080/v1',
+      workers: enabledWorkers.length,
+      model: path.basename(config.modelPath)
+    };
+  } catch (err) {
+    // Cleanup on any unexpected error
+    if (inferenceServerProcess) {
+      try {
+        inferenceServerProcess.kill('SIGTERM');
+      } catch (e) {
+        // Ignore
+      }
+      inferenceServerProcess = null;
+    }
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('stop-inference-server', async () => {
+  try {
+    if (inferenceServerProcess) {
+      try {
+        inferenceServerProcess.kill('SIGTERM');
+      } catch (e) {
+        // Ignore kill errors
+      }
+      inferenceServerProcess = null;
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: true };
+  }
+});
+
+ipcMain.handle('get-inference-server-status', async () => {
+  try {
+    const running = inferenceServerProcess !== null && !inferenceServerProcess.killed;
+    return {
+      running,
+      url: running ? 'http://localhost:18080/v1' : null
+    };
+  } catch (err) {
+    return { running: false, url: null };
   }
 });

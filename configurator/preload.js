@@ -6,5 +6,8 @@ contextBridge.exposeInMainWorld('rpcCluster', {
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
   loadConfig: () => ipcRenderer.invoke('load-config'),
   openConfigFolder: () => ipcRenderer.invoke('open-config-folder'),
-  testCluster: (config) => ipcRenderer.invoke('test-cluster', config)
+  testCluster: (config) => ipcRenderer.invoke('test-cluster', config),
+  startInferenceServer: () => ipcRenderer.invoke('start-inference-server'),
+  stopInferenceServer: () => ipcRenderer.invoke('stop-inference-server'),
+  getInferenceServerStatus: () => ipcRenderer.invoke('get-inference-server-status')
 });

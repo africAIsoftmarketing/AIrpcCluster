@@ -438,6 +438,146 @@
       gap: 12px;
       margin-top: 12px;
     }
+
+    /* Inference Server */
+    .btn-danger {
+      background: #c62828;
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #d32f2f;
+    }
+
+    .server-info-box {
+      background: #1e1e2e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .server-status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.idle { background: #666; }
+    .status-dot.running { background: #4caf50; }
+
+    .server-success-panel {
+      border: 1px solid #4caf50;
+      background: #0a1f0a;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .api-url-box {
+      display: flex;
+      align-items: center;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      margin-top: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .api-url-text {
+      flex: 1;
+      padding: 10px 14px;
+      font-family: monospace;
+      font-size: 14px;
+      color: #e8e8e8;
+      user-select: all;
+    }
+
+    .copy-btn {
+      padding: 10px 14px;
+      background: transparent;
+      border: none;
+      border-left: 1px solid #333;
+      color: #7c6df0;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .copy-btn:hover { background: rgba(124, 109, 240, 0.1); }
+
+    .server-detail-row {
+      font-size: 13px;
+      color: #ccc;
+      margin-bottom: 4px;
+    }
+
+    .server-divider {
+      border: none;
+      border-top: 1px solid #333;
+      margin: 12px 0;
+    }
+
+    .server-instructions {
+      font-size: 13px;
+      color: #aaa;
+      line-height: 1.7;
+    }
+
+    .server-instructions strong {
+      color: #ccc;
+    }
+
+    .server-instructions ol {
+      margin: 8px 0 0 20px;
+    }
+
+    .curl-block {
+      background: #111;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #ccc;
+      margin-top: 8px;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.5;
+    }
+
+    .server-error-panel {
+      border: 1px solid #f44336;
+      background: #1f0a0a;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .server-error-panel .error-title {
+      color: #f44336;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .server-error-panel .error-message {
+      font-size: 13px;
+      color: #ccc;
+    }
+
+    .card-subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -582,6 +722,87 @@
       
       <a id="footer-open-folder" class="footer-link">Open config folder →</a>
     </div>
+
+    <!-- Step 5: Start inference server -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge">5</div>
+        <div>
+          <h2 class="card-title">Start inference server</h2>
+          <p class="card-subtitle">Launch llama-server with your cluster configuration and connect it to LM Studio as a remote model.</p>
+        </div>
+      </div>
+
+      <button id="server-btn" class="btn btn-primary btn-full" disabled title="Save configuration first">Start inference server</button>
+
+      <!-- State A: idle -->
+      <div id="server-idle" class="server-info-box">
+        <div class="server-status-row">
+          <span class="status-dot idle"></span>
+          <span>Server not running</span>
+        </div>
+        <p style="font-size: 12px; color: #888; margin-top: 8px;">Once started, connect LM Studio to this server as a remote model.</p>
+      </div>
+
+      <!-- State B: starting -->
+      <div id="server-starting" class="server-info-box hidden">
+        <div class="server-status-row">
+          <div class="spinner"></div>
+          <span id="server-starting-text">Launching llama-server…</span>
+        </div>
+        <p style="font-size: 12px; color: #888; margin-top: 8px;">This may take up to 30 seconds on first run.</p>
+      </div>
+
+      <!-- State C: running -->
+      <div id="server-running" class="server-success-panel hidden">
+        <div class="server-status-row">
+          <span class="status-dot running"></span>
+          <span style="color: #4caf50; font-weight: 500;">Server running</span>
+        </div>
+
+        <p style="font-size: 13px; color: #aaa; margin-top: 12px;">API endpoint:</p>
+        <div class="api-url-box">
+          <span class="api-url-text">http://localhost:18080/v1</span>
+          <button id="copy-url-btn" class="copy-btn">Copy</button>
+        </div>
+
+        <div id="server-model-info" class="server-detail-row"></div>
+        <div id="server-workers-info" class="server-detail-row"></div>
+
+        <hr class="server-divider">
+
+        <div class="server-instructions">
+          <strong>How to connect to LM Studio:</strong>
+          <ol>
+            <li>Open LM Studio</li>
+            <li>Click the model selector at the top</li>
+            <li>Select "Use a remote model via URL"</li>
+            <li>Enter: <code>http://localhost:18080/v1</code></li>
+            <li>Start chatting — inference runs on your cluster</li>
+          </ol>
+        </div>
+
+        <hr class="server-divider">
+
+        <div class="server-instructions">
+          <strong>Or use with any OpenAI-compatible client:</strong>
+        </div>
+        <div id="curl-block" class="curl-block">curl http://localhost:18080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "local",
+    "messages": [{"role":"user","content":"Hello"}],
+    "stream": false
+  }'</div>
+        <button id="copy-curl-btn" class="btn btn-secondary" style="margin-top: 8px; font-size: 12px; padding: 8px 14px;">Copy curl command</button>
+      </div>
+
+      <!-- State D: error -->
+      <div id="server-error" class="server-error-panel hidden">
+        <div class="error-title">Failed to start server</div>
+        <div id="server-error-message" class="error-message"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -594,6 +815,8 @@
       temperature: 0.7,
       discoveryTimeoutMs: 4000,
       configSaved: false,
+      serverRunning: false,
+      serverUrl: null,
     };
 
     // Platform helpers
@@ -809,6 +1032,7 @@
           btn.textContent = 'Saved ✓';
           successEl.classList.remove('hidden');
           testBtn.classList.remove('hidden');
+          updateServerButton();
         } else {
           throw new Error(result.error);
         }
@@ -863,6 +1087,115 @@
       await window.rpcCluster.openConfigFolder();
     }
 
+    // Update Step 5 server button state based on configSaved
+    function updateServerButton() {
+      const btn = document.getElementById('server-btn');
+      if (state.serverRunning) {
+        btn.disabled = false;
+        btn.title = '';
+        btn.textContent = 'Stop inference server';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger');
+      } else {
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        btn.textContent = 'Start inference server';
+        if (state.configSaved) {
+          btn.disabled = false;
+          btn.title = '';
+        } else {
+          btn.disabled = true;
+          btn.title = 'Save configuration first';
+        }
+      }
+    }
+
+    // Show inference server state
+    function showServerState(stateName, data) {
+      const idle = document.getElementById('server-idle');
+      const starting = document.getElementById('server-starting');
+      const running = document.getElementById('server-running');
+      const error = document.getElementById('server-error');
+
+      idle.classList.add('hidden');
+      starting.classList.add('hidden');
+      running.classList.add('hidden');
+      error.classList.add('hidden');
+
+      if (stateName === 'idle') {
+        idle.classList.remove('hidden');
+      } else if (stateName === 'starting') {
+        starting.classList.remove('hidden');
+        const text = document.getElementById('server-starting-text');
+        const workerCount = state.workers.filter(w => w.enabled).length;
+        text.textContent = `Launching llama-server with ${workerCount} worker(s)…`;
+      } else if (stateName === 'running') {
+        running.classList.remove('hidden');
+        document.getElementById('server-model-info').textContent = `Model: ${data.model || 'unknown'}`;
+        const wCount = data.workers || 0;
+        document.getElementById('server-workers-info').textContent = wCount > 0
+          ? `Workers: ${wCount} worker(s) active`
+          : 'Workers: Local only';
+      } else if (stateName === 'error') {
+        error.classList.remove('hidden');
+        document.getElementById('server-error-message').textContent = data.error || 'Unknown error';
+      }
+    }
+
+    // Start inference server
+    async function startServer() {
+      const btn = document.getElementById('server-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Starting server…';
+      showServerState('starting');
+
+      try {
+        const result = await window.rpcCluster.startInferenceServer();
+        if (result.ok) {
+          state.serverRunning = true;
+          state.serverUrl = result.url;
+          showServerState('running', { model: result.model, workers: result.workers });
+        } else {
+          state.serverRunning = false;
+          state.serverUrl = null;
+          showServerState('error', { error: result.error });
+        }
+      } catch (err) {
+        state.serverRunning = false;
+        state.serverUrl = null;
+        showServerState('error', { error: err.message });
+      }
+      updateServerButton();
+    }
+
+    // Stop inference server
+    async function stopServer() {
+      const btn = document.getElementById('server-btn');
+      btn.disabled = true;
+      btn.textContent = 'Stopping…';
+
+      try {
+        await window.rpcCluster.stopInferenceServer();
+      } catch (err) {
+        // Ignore errors
+      }
+      state.serverRunning = false;
+      state.serverUrl = null;
+      showServerState('idle');
+      updateServerButton();
+    }
+
+    // Copy to clipboard with feedback
+    function copyToClipboard(text, buttonEl) {
+      navigator.clipboard.writeText(text).then(() => {
+        const original = buttonEl.textContent;
+        buttonEl.textContent = 'Copied!';
+        setTimeout(() => { buttonEl.textContent = original; }, 2000);
+      }).catch(() => {
+        // Fallback: ignore
+      });
+    }
+
     // Initialize
     async function init() {
       // Display config path
@@ -898,9 +1231,27 @@
         saveBtn.textContent = 'Saved ✓';
         document.getElementById('save-success').classList.remove('hidden');
         document.getElementById('test-btn').classList.remove('hidden');
+        
+        // Enable server button since config is saved
+        updateServerButton();
       }
       
       updateSummary();
+
+      // Check if inference server is already running
+      try {
+        const serverStatus = await window.rpcCluster.getInferenceServerStatus();
+        if (serverStatus.running) {
+          state.serverRunning = true;
+          state.serverUrl = serverStatus.url;
+          const modelFile = state.modelPath ? state.modelPath.split(/[/\\]/).pop() : 'unknown';
+          const workerCount = state.workers.filter(w => w.enabled).length;
+          showServerState('running', { model: modelFile, workers: workerCount });
+          updateServerButton();
+        }
+      } catch (err) {
+        // Ignore — server status check is non-critical
+      }
       
       // Event listeners
       document.getElementById('scan-btn').addEventListener('click', scanWorkers);
@@ -911,6 +1262,21 @@
       document.getElementById('test-btn').addEventListener('click', testCluster);
       document.getElementById('open-folder-link').addEventListener('click', openConfigFolder);
       document.getElementById('footer-open-folder').addEventListener('click', openConfigFolder);
+      
+      // Step 5: server button
+      document.getElementById('server-btn').addEventListener('click', () => {
+        if (state.serverRunning) {
+          stopServer();
+        } else {
+          startServer();
+        }
+      });
+      document.getElementById('copy-url-btn').addEventListener('click', (e) => {
+        copyToClipboard('http://localhost:18080/v1', e.target);
+      });
+      document.getElementById('copy-curl-btn').addEventListener('click', (e) => {
+        copyToClipboard(document.getElementById('curl-block').textContent, e.target);
+      });
       
       // Model path input
       document.getElementById('model-path-input').addEventListener('input', (e) => {
