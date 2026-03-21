@@ -52,8 +52,16 @@ Download the appropriate installer for each worker laptop:
 
 - **Windows**: `rpc-cluster-worker-setup-win64.exe`
 - **macOS**: `rpc-cluster-worker-0.1.0-macos.pkg`
+- **Linux**: `rpc-cluster-worker-0.1.0-linux-x64.tar.gz`
 
 Run the installer. The RPC server and discovery beacon will start automatically as system services.
+
+**Linux** — extract the tarball and run the install script:
+```bash
+tar xzf rpc-cluster-worker-0.1.0-linux-x64.tar.gz
+cd rpc-cluster-worker-0.1.0-linux-x64
+sudo ./install.sh
+```
 
 ### 2. Configure with the Configurator App
 
@@ -148,12 +156,28 @@ choco install innosetup
 ./installers/macos/build-macos-installer.sh
 ```
 
+**Linux** (requires systemd):
+```bash
+# Download llama.cpp binary
+# Place rpc-server in vendor/linux/
+
+# Build beacon
+cd worker-beacon && ./build.sh && cd ..
+
+# Run the installer directly (or package for distribution)
+sudo ./installers/linux/install.sh
+
+# To uninstall
+sudo ./installers/linux/install.sh --uninstall
+```
+
 ## CI/CD
 
 GitHub Actions workflows automatically build installers on push:
 
 - `.github/workflows/build-windows.yml` - Windows installer
 - `.github/workflows/build-macos.yml` - macOS installer
+- `.github/workflows/build-linux.yml` - Linux installer
 
 Artifacts are uploaded and available for download from the Actions tab.
 
@@ -179,6 +203,7 @@ By default, CI downloads CPU-only binaries for maximum compatibility. To use GPU
 3. **Service status**:
    - Windows: `sc query LlamaRPCBeacon`
    - macOS: `sudo launchctl list | grep rpccluster`
+   - Linux: `systemctl status rpc-cluster-beacon rpc-cluster-rpcserver`
 
 ### llama-server Not Found
 
@@ -220,6 +245,7 @@ Ensure the model path in plugin config:
 2. **Increase discovery timeout** if workers are missing
 3. **Check worker logs**:
    - macOS: `tail -f /var/log/rpc-server.log`
+   - Linux: `journalctl -u rpc-cluster-rpcserver -f`
    - Windows: Event Viewer → Windows Logs → Application
 
 ### First Inference is Very Slow
@@ -279,20 +305,26 @@ rpc-cluster/
 │   ├── windows/                # Inno Setup installer
 │   │   ├── setup.iss
 │   │   └── build-windows-installer.ps1
-│   └── macos/                  # pkgbuild installer
-│       ├── build-macos-installer.sh
-│       ├── Distribution.xml
-│       ├── launchd/
-│       └── scripts/
+│   ├── macos/                  # pkgbuild installer
+│   │   ├── build-macos-installer.sh
+│   │   ├── Distribution.xml
+│   │   ├── launchd/
+│   │   └── scripts/
+│   └── linux/                  # systemd installer
+│       ├── install.sh
+│       ├── rpc-cluster-rpcserver.service
+│       └── rpc-cluster-beacon.service
 │
 ├── .github/
 │   └── workflows/
 │       ├── build-windows.yml   # Windows CI pipeline
-│       └── build-macos.yml     # macOS CI pipeline
+│       ├── build-macos.yml     # macOS CI pipeline
+│       └── build-linux.yml     # Linux CI pipeline
 │
 ├── vendor/                     # Pre-built binaries (not in git)
 │   ├── windows/
-│   └── macos/
+│   ├── macos/
+│   └── linux/
 │
 ├── Makefile                    # Build orchestration
 └── README.md
@@ -305,6 +337,7 @@ rpc-cluster/
 Located at:
 - **macOS**: `~/Library/Application Support/rpc-cluster/config.json`
 - **Windows**: `%APPDATA%\rpc-cluster\config.json`
+- **Linux**: `~/.config/rpc-cluster/config.json`
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|

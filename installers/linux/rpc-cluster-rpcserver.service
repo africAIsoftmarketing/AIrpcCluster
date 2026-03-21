@@ -1,0 +1,18 @@
+[Unit]
+Description=llama.cpp RPC Server for distributed inference
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rpc-server -H 0.0.0.0 -p 50052 -m 0
+WorkingDirectory=/var/cache/llama-rpc
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rpc-cluster-rpcserver
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target

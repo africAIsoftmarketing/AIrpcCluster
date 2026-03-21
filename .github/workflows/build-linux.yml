@@ -1,0 +1,225 @@
+name: Build Linux Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'installers/linux/**'
+      - 'worker-beacon/**'
+      - '.github/workflows/build-linux.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'installers/linux/**'
+      - 'worker-beacon/**'
+  workflow_dispatch:
+    inputs:
+      llama_cpp_variant:
+        description: 'llama.cpp release variant'
+        required: false
+        default: 'cpu'
+        type: choice
+        options:
+          - cpu
+          - cuda-cu11.7
+          - cuda-cu12.4
+          - vulkan
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          npm install -g postject
+          echo "Node.js version: $(node -v)"
+          echo "npm version: $(npm -v)"
+
+      - name: Download llama.cpp rpc-server
+        run: |
+          set -e
+
+          echo "Fetching latest llama.cpp release..."
+          RELEASE_INFO=$(curl -s https://api.github.com/repos/ggml-org/llama.cpp/releases/latest)
+          RELEASE_TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+          echo "Latest release: $RELEASE_TAG"
+
+          VARIANT="${{ github.event.inputs.llama_cpp_variant || 'cpu' }}"
+
+          case "$VARIANT" in
+            cuda-cu11.7) PATTERN="linux-cuda-cu11.7-x64" ;;
+            cuda-cu12.4) PATTERN="linux-cuda-cu12.4-x64" ;;
+            vulkan)      PATTERN="linux-vulkan-x64" ;;
+            *)           PATTERN="linux-x64" ;;
+          esac
+
+          echo "Looking for asset matching pattern: $PATTERN"
+
+          DOWNLOAD_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | contains(\"$PATTERN\") and contains(\".tar.gz\") and (contains(\"sha256\") | not)) | .browser_download_url" | head -1)
+
+          # Fallback to .zip if no tar.gz found
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            DOWNLOAD_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | contains(\"$PATTERN\") and contains(\".zip\") and (contains(\"sha256\") | not)) | .browser_download_url" | head -1)
+          fi
+
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            echo "Error: Could not find Linux binary in release"
+            echo "Available assets:"
+            echo "$RELEASE_INFO" | jq -r '.assets[].name'
+            exit 1
+          fi
+
+          echo "Downloading: $DOWNLOAD_URL"
+
+          mkdir -p vendor/linux
+
+          if echo "$DOWNLOAD_URL" | grep -q '\.tar\.gz'; then
+            curl -L -o llama-release.tar.gz "$DOWNLOAD_URL"
+            mkdir -p llama-extract
+            tar xzf llama-release.tar.gz -C llama-extract
+            rm -f llama-release.tar.gz
+          else
+            curl -L -o llama-release.zip "$DOWNLOAD_URL"
+            unzip -o llama-release.zip -d llama-extract
+            rm -f llama-release.zip
+          fi
+
+          RPC_SERVER=$(find llama-extract -name "rpc-server" -type f | head -1)
+          if [ -z "$RPC_SERVER" ]; then
+            echo "Error: rpc-server not found in archive"
+            echo "Contents:"
+            find llama-extract -type f
+            exit 1
+          fi
+
+          cp "$RPC_SERVER" vendor/linux/rpc-server
+          chmod +x vendor/linux/rpc-server
+          echo "rpc-server extracted to vendor/linux/"
+          ls -la vendor/linux/
+
+          rm -rf llama-extract
+
+      - name: Build worker beacon
+        run: |
+          cd worker-beacon
+
+          echo "Generating SEA blob..."
+          node --experimental-sea-config sea-config.json
+
+          echo "Creating executable..."
+          mkdir -p dist
+          cp "$(which node)" dist/rpc-worker-beacon-linux
+
+          echo "Injecting SEA blob..."
+          npx postject dist/rpc-worker-beacon-linux NODE_SEA_BLOB sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+
+          chmod +x dist/rpc-worker-beacon-linux
+
+          echo "Beacon built:"
+          ls -la dist/
+
+          rm -f sea-prep.blob
+
+      - name: Package Linux installer
+        run: |
+          set -e
+
+          VERSION="0.1.0"
+          STAGING="rpc-cluster-worker-${VERSION}-linux-x64"
+          mkdir -p "dist/$STAGING"
+
+          # Copy binaries
+          cp vendor/linux/rpc-server                  "dist/$STAGING/"
+          cp worker-beacon/dist/rpc-worker-beacon-linux "dist/$STAGING/rpc-worker-beacon"
+          chmod +x "dist/$STAGING/rpc-server"
+          chmod +x "dist/$STAGING/rpc-worker-beacon"
+
+          # Copy installer script and systemd units
+          cp installers/linux/install.sh                        "dist/$STAGING/"
+          cp installers/linux/rpc-cluster-rpcserver.service     "dist/$STAGING/"
+          cp installers/linux/rpc-cluster-beacon.service        "dist/$STAGING/"
+          chmod +x "dist/$STAGING/install.sh"
+
+          # Patch install.sh paths so it works from the extracted directory
+          # (the distributed install.sh finds binaries relative to itself)
+          sed -i 's|RPC_SERVER_SRC="$ROOT_DIR/vendor/linux/rpc-server"|RPC_SERVER_SRC="$SCRIPT_DIR/rpc-server"|' "dist/$STAGING/install.sh"
+          sed -i 's|BEACON_SRC="$ROOT_DIR/worker-beacon/dist/rpc-worker-beacon-linux"|BEACON_SRC="$SCRIPT_DIR/rpc-worker-beacon"|' "dist/$STAGING/install.sh"
+
+          # Create tarball
+          cd dist
+          tar czf "${STAGING}.tar.gz" "$STAGING"
+          rm -rf "$STAGING"
+
+          echo "Package contents:"
+          ls -la
+          echo "Archive size: $(du -h ${STAGING}.tar.gz | cut -f1)"
+
+      - name: Verify package
+        run: |
+          echo "Verifying archive contents..."
+          ARCHIVE=$(ls dist/*.tar.gz)
+          tar tzf "$ARCHIVE"
+
+      - name: Upload Linux installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpc-cluster-worker-linux-installer
+          path: dist/rpc-cluster-worker-*-linux-x64.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload worker beacon (standalone)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpc-worker-beacon-linux
+          path: worker-beacon/dist/rpc-worker-beacon-linux
+          retention-days: 30
+
+  test-installer:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v4
+        with:
+          name: rpc-cluster-worker-linux-installer
+          path: ./installer
+
+      - name: Test installer (dry run)
+        run: |
+          echo "Extracting archive..."
+          ARCHIVE=$(ls installer/*.tar.gz)
+          tar xzf "$ARCHIVE" -C installer
+
+          INSTALL_DIR=$(find installer -mindepth 1 -maxdepth 1 -type d)
+          echo "Extracted to: $INSTALL_DIR"
+          echo "Contents:"
+          ls -la "$INSTALL_DIR"
+
+          echo ""
+          echo "Verifying install.sh is executable..."
+          test -x "$INSTALL_DIR/install.sh" && echo "OK" || echo "FAIL"
+
+          echo "Verifying rpc-server is present..."
+          test -f "$INSTALL_DIR/rpc-server" && echo "OK" || echo "FAIL"
+
+          echo "Verifying beacon is present..."
+          test -f "$INSTALL_DIR/rpc-worker-beacon" && echo "OK" || echo "FAIL"
+
+          echo "Verifying systemd units are present..."
+          test -f "$INSTALL_DIR/rpc-cluster-rpcserver.service" && echo "OK" || echo "FAIL"
+          test -f "$INSTALL_DIR/rpc-cluster-beacon.service" && echo "OK" || echo "FAIL"
+
+          echo ""
+          echo "Installer test passed"
