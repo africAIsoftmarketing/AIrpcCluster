@@ -1,116 +1,204 @@
-<analysis>**original_problem_statement**: The user wants to build the  LM Studio plugin and its worker installers. This system distributes LLM inference across multiple laptops on a local network using llama.cpp's RPC backend. It requires an LM Studio Generator Plugin (TypeScript), a Worker beacon (Node.js UDP), cross-platform installers (Windows Inno Setup, macOS pkgbuild), CI/CD pipelines (GitHub Actions), and a standalone Configurator app (Electron).
+<analysis>Here is the handover summary for the next agent:
+
+**original_problem_statement**: The user is building the  system to distribute LLM inference across multiple devices on a local network using llama.cpp's RPC backend. The system consists of an LM Studio Generator Plugin, a Node.js UDP worker beacon, cross-platform native installers, a standalone Electron Configurator app, and an Android worker application.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
-**what currently exists?**: A fully functional, tested, and validated codebase. The repository contains the LM Studio plugin (), the UDP broadcast beacon (), native installer build scripts (), automated CI/CD workflows (), and a vanilla-HTML/JS Electron Configurator app (). The test suite (Vitest) is fully passing with 54 tests.
+**what currently exists?**: A robust, multi-platform ecosystem. It includes the LM Studio plugin (), standalone Electron Configurator (), native installers for Windows/macOS/Linux (), an Android worker app ( using Kotlin/NDK), and automated CI/CD pipelines via GitHub Actions for all platforms. 
 
 **Last working item**:
-- **Last item agent was working**: Updating the  to address 5 specific documentation issues requested by the user (reordering Quick Start steps, updating phrasing, and adding Linux support documentation). 
-- **Status**: IN PROGRESS (The agent executed the  commands successfully but has not yet called the  tool or summarized the action for the user).
-- **Agent Testing Done**: NA (Documentation update).
-- **Which testing method agent to use?**: NA.
-- **User Testing Done**: N.
+- **Last item agent was working**: Fixing the  installation wizard (Step 0) in the Configurator. The agent just updated  to extract ALL required  files from the downloaded zip (instead of just the ), added a  IPC handler, and updated  to include a Reinstall/Repair UI flow.
+- **Status**: TESTING PENDING (The agent successfully applied the file edits using  but stopped before running the test suite to confirm nothing broke, and did not call the  tool).
+- **Agent Testing Done**: N
+- **Which testing method agent to use?**: Manual testing by  (
+ RUN  v2.1.9 /app/rpc-cluster-plugin
+
+stdout | src/__tests__/discovery.test.ts > discoverWorkers > should discover and return valid workers
+[discovery] Found: worker-1 @ 192.168.1.10:50052 (8GB VRAM)
+
+stdout | src/__tests__/discovery.test.ts > discoverWorkers > should deduplicate workers by IP address
+[discovery] Found: worker-1 @ 192.168.1.10:50052 (8GB VRAM)
+
+stdout | src/__tests__/discovery.test.ts > discoverWorkers > should sort workers by VRAM descending
+[discovery] Found: low-vram @ 192.168.1.10:50052 (4GB VRAM)
+[discovery] Found: high-vram @ 192.168.1.11:50052 (16GB VRAM)
+[discovery] Found: mid-vram @ 192.168.1.12:50052 (8GB VRAM)
+
+stdout | src/__tests__/discovery.test.ts > discoverWorkers > should silently ignore malformed JSON packets
+[discovery] Found: worker-1 @ 192.168.1.12:50052 (8GB VRAM)
+
+stdout | src/__tests__/discovery.test.ts > discoverWorkers > should handle end-to-end discovery scenario correctly
+[discovery] Found: Laptop-B @ 192.168.1.12:50052 (8GB VRAM)
+
+ ✓ src/__tests__/discovery.test.ts (12 tests) 13ms
+ ✓ src/__tests__/config.test.ts (17 tests) 79ms
+ ✓ src/__tests__/utils.test.ts (14 tests) 383ms
+ ✓ src/__tests__/generator.test.ts (11 tests) 81ms
+
+ Test Files  4 passed (4)
+      Tests  54 passed (54)
+   Start at  20:26:50
+   Duration  2.74s (transform 924ms, setup 0ms, collect 1.54s, tests 556ms, environment 1ms, prepare 1.33s)) to ensure backend plugin tests remain green, followed by calling the  tool. 
+- **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-Issue 1: Finalize README updates
-- Attempted fixes: Agent successfully applied edits to  using .
-- Next debug checklist: Read the  to ensure the 5 requested edits (Quick Start steps order, Linux config path documentation, removal of production deployment build instructions, etc.) are perfectly applied.
-- Why fix this issue and what will be achieved with the fix?: Wraps up the last explicit user request ensuring documentation accurately reflects the codebase architecture.
-- Status: IN PROGRESS
+Issue 1: Finalize the  extraction and repair UI feature
+- Attempted fixes: Code has been fully implemented in  and .
+- Next debug checklist: Run 
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90m/app[39m
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould discover and return valid workers
+[22m[39m[discovery] Found: worker-1 @ 192.168.1.10:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould deduplicate workers by IP address
+[22m[39m[discovery] Found: worker-1 @ 192.168.1.10:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould sort workers by VRAM descending
+[22m[39m[discovery] Found: low-vram @ 192.168.1.10:50052 (4GB VRAM)
+[discovery] Found: high-vram @ 192.168.1.11:50052 (16GB VRAM)
+[discovery] Found: mid-vram @ 192.168.1.12:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould silently ignore malformed JSON packets
+[22m[39m[discovery] Found: worker-1 @ 192.168.1.12:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould handle end-to-end discovery scenario correctly
+[22m[39m[discovery] Found: Laptop-B @ 192.168.1.12:50052 (8GB VRAM)
+
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/config.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/discovery.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 96[2mms[22m[39m
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/generator.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/utils.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 420[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m54 passed[39m[22m[90m (54)[39m
+[2m   Start at [22m 20:27:00
+[2m   Duration [22m 1.12s[2m (transform 747ms, setup 0ms, import 1.45s, tests 611ms, environment 0ms)[22m in the  directory. If passing, write a wrap-up summary using the  tool. Update  with the massive feature additions from this session.
+- Why fix this issue and what will be achieved with the fix?: Ensures Windows users actually receive the required  files alongside , preventing execution crashes.
+- Status: TESTING PENDING
 - Is recurring issue? N
-- Should Test frontend/backend/both after fix? NA
-- Blocked on other issue: None
+- Should Test frontend/backend/both after fix? backend (via vitest)
 
 **In progress Task List**:
-Task 1: Complete current session
-- Where to resume: Review the recent  changes and call the  tool or ask the user for the next steps.
-- What will be achieved with this?: Closes out the current set of strict validation and documentation tasks.
+Task 1: Update PRD.md and Finish
+- Where to resume: Run tests, update documentation (PRD.md) to reflect the new Android Worker and Configurator Installer Wizard, and use the  tool.
+- What will be achieved with this?: Closes out the current session cleanly.
 - Status: IN PROGRESS
 - Should Test frontend/backend/both after fix? NA
 - Blocked on something: None
 
 **Upcoming and Future Tasks**:
 Upcoming Tasks:
-- P1: Manual end-to-end integration testing using a real LM Studio instance,  binary, and actual network worker laptops (as documented in ).
-- P2: Build distributable artifacts for the Configurator (, ) and worker installers to test CI/CD outputs locally.
+- P1: Comprehensive End-to-End Testing. Spin up the Electron app, complete the Step 0 auto-installer, connect the Android worker, and verify distributed inference through LM Studio.
+- P2: Code Signing. The Electron builder CI pipelines currently bypass code signing (). GitHub secrets and signing configurations need to be implemented for production Windows/macOS distribution.
+- P3: Refactor . The Configurator's vanilla HTML/JS file has grown to ~1600 lines. Separating JS logic and CSS into external files within the  directory will improve maintainability.
 
 **Completed work in this session**:
-- Base structure creation (, , , ).
-- GitHub Actions CI/CD configuration for macOS and Windows.
-- Implemented and passed 54 Vitest unit tests for the plugin (including mocked UDP discovery, TCP port waiting, and child process spawning).
-- Fixed race condition in  (switched from boolean flag to Promise-based lock).
-- Fixed SIGTERM socket closure in .
-- Created standalone Configurator Electron app () with strict constraints (no UI framework, no external CDNs, strict IPC error handling).
-- Created and validated  and .
+- Linux installer (, ) and CI/CD workflow (DONE)
+- Configurator Build Pipeline added to  and GitHub Actions (DONE)
+- LM Studio SDK integration fixed (rewrote  to use , switched to ESM/NodeNext, updated  dependencies) (DONE)
+- Configurator UI Step 5: Start Inference Server embedded capability (DONE)
+- Android Worker App built using Kotlin, Jetpack Compose, and Android NDK (JNI wrapper for  rpc-server) + Android CI workflow (DONE)
+- UDP Discovery Fixed: Switched from limited broadcast () to directed subnet broadcast, and bound listener to  to bypass Wi-Fi router blocking (DONE)
+- Configurator UI: Added Edit, Reset, and Manual IP fallback features (DONE)
+- Configurator UI Step 0: Added Hardware Detection (GPU/VRAM) and  automatic download/extraction wizard (DONE)
 
 **Earlier issues found/mentioned but not fixed**:
-- None. The agent systematically addressed all validation points and fixed them (e.g.,  race condition,  error handling, recursive directory scanning).
+- None. The previous agent successfully tackled a massive, multi-faceted queue of user requests.
 
 **Known issue recurrence from previous fork**:
-- Issue recurrence in previous fork: None (First session).
+- Issue recurrence in previous fork: None
 - Recurrence count: 0
 - Status: NA
 
 **Code Architecture**:
 
 
-**Key Technical Concepts**: TypeScript, Node.js (dgram UDP), Electron (IPC handling), Vitest, Zod, LM Studio SDK integration, Bash/PowerShell scripting.
+**Key Technical Concepts**: TypeScript, Node.js (Electron, IPC, dgram UDP), Kotlin (Android API 26-34, Jetpack Compose, Foreground Services), Android NDK (CMake, C++, JNI), Vitest, GitHub Actions workflows.
 
 **key DB schema**: 
-- Database: NA. The app relies on a local JSON file () stored in a platform-aware path ( or ).
+- NA. State is managed via local JSON ().
 
 **changes in tech stack**: 
-- Added  and  for the Configurator GUI as requested by the user mid-session.
+- Added  to Electron Configurator for extracting GitHub release assets.
+- Added Android ecosystem (Kotlin, Gradle, NDK).
 
 **All files of reference**: 
--  (Currently being edited)
--  (Testing steps)
--  (Core plugin logic)
--  &  (Electron GUI)
+-  (Contains extraction and GPU detection logic)
+-  (Contains the massive 6-step state machine for the UI)
+-  (Entry point adapting to the LM Studio SDK)
 
 **Areas that need refactoring**: 
-- None currently. The code is highly optimized to meet very strict user constraints (e.g., zero frameworks in Electron renderer, specific Promise patterns, isolated ports). Avoid refactoring unless explicitly requested.
+- : Contains ~1600 lines of combined HTML, CSS, and JS. Consider migrating logic to  and styles to  while maintaining the no framework/bundler constraint requested by the user.
 
 **key api endpoints**: 
-- Port  (UDP): Discovery broadcast.
-- Port  (TCP):  inference spawned by the Plugin.
-- Port  (TCP):  inference spawned by the Configurator test button.
+- Port  (UDP): Discovery broadcast (Directed Subnet + Limited).
 - Port  (TCP): Worker RPC server port.
+- Port  (TCP): Inference server spawned by Configurator Step 5.
+- Port  (TCP): Test cluster server.
 
 **Critical Info for New Agent**: 
-- **Strict Constraints**: Do NOT use UI frameworks (React, Vue) or bundlers (Vite, Webpack) in the  folder. It must be plain HTML/JS/CSS.
-- **Port Isolation**: Do NOT mix ports.  is strictly for  (plugin), and  is strictly for .
-- **Race Condition Guard**:  uses a strict Promise-based lock (), do not revert this to a boolean flag.
+- **LM Studio SDK Constraints**: The plugin MUST use the  pattern in  and use ESM () in .
+- **Configurator Constraints**: Do NOT use React/Vue/Vite in the  frontend. It must remain vanilla HTML/JS/CSS.
+- **Android Constraints**: JNI runs the  rpc-server in a dedicated  so it doesn't block Android's main thread. Network calls use a  and .
 
 **documents and test reports created in this job**: 
 - 
 - 
 
 **Last 10 User Messages and any pending HUMAN messages**: 
-1. 
-2. Requested 5 CI/CD and testing requirements.
-3. Update README.md with Configurator instructions and troubleshooting.
-4. Foundation Validation - strictly verify/fix 3 layers of code, generate .
-5. Show exact code for 4 specific points (race conditions, tests, SIGTERM). Fix if wrong.
-6. Build Configurator GUI (Electron app).
-7. Detailed file requirements and strict constraints for Configurator.
-8. Verify 5 critical points in the Configurator codebase.
-9. *Latest*: Update  to fix 5 specific documentation issues (Quick Start step order, text replacement, Linux docs). (Agent has performed the edits but session is open).
+1. Fix  electron-builder validation errors.
+2. Fix  lms dev validation errors (Missing runner/owner).
+3. Fix Cannot find module  in plugin.
+4. Fix missing  and unknown  command.
+5. Fix  - cannot create LMStudioClient manually.
+6. Fix  - must use  export pattern.
+7. Add Start Inference Server feature to the Configurator (Step 5).
+8. Build an Android worker app (Kotlin/NDK).
+9. Fix UDP worker discovery not traversing Wi-Fi networks (use directed broadcast).
+10. Add configuration reset/edit capability and strip quotes from paths.
+11. Add  auto-detection and installation wizard (Step 0).
+12. *(Latest)* Fix Step 0 extracting only  (missing s) and add a Reinstall/Repair button.
 
 **Project Health Check**:
-- Broken: None
-- Mocked: Vitest mocks for , , and  inside .
+- Broken: None. 
+- Mocked: Vitest mocks for networking in the plugin test suite.
 
 **3rd Party Integrations**: 
-- LM Studio SDK — Local usage
-- OpenAI NPM Client — Local usage (translating calls to )
+- LM Studio SDK (@lmstudio/sdk) — Local NPM dependency.
+- GitHub API — Used to fetch  releases dynamically in . No keys needed (public endpoint).
 
 **Testing status**: 
-- Testing agent used after significant changes: NO (User provided strict Vitest requirements; Agent used standard shell execution to run tests).
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created:  (discovery, config, utils, generator).
-- Known regressions: None. (54/54 tests pass).
+- Testing agent used after significant changes: NO (Agent self-tested via shell commands).
+- Test files created: None this session. Used existing suite.
+- Known regressions: None.
 
-**Credentials to test flow**: NA.
+**What agent forgot to execute**: 
+The agent fully wrote the code to fix the DLL extraction and the Reinstall UI flow requested in the very last prompt, but stopped immediately after the file edits. It forgot to run 
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90m/app[39m
 
-**What agent forgot to execute**: The agent successfully executed the final  to update the  based on the user's latest prompt, but stopped right there. It needs to review the diff to ensure correctness and call the  tool with a summary for the user.</analysis>
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould discover and return valid workers
+[22m[39m[discovery] Found: worker-1 @ 192.168.1.10:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould deduplicate workers by IP address
+[22m[39m[discovery] Found: worker-1 @ 192.168.1.10:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould sort workers by VRAM descending
+[22m[39m[discovery] Found: low-vram @ 192.168.1.10:50052 (4GB VRAM)
+[discovery] Found: high-vram @ 192.168.1.11:50052 (16GB VRAM)
+[discovery] Found: mid-vram @ 192.168.1.12:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould silently ignore malformed JSON packets
+[22m[39m[discovery] Found: worker-1 @ 192.168.1.12:50052 (8GB VRAM)
+
+[90mstdout[2m | rpc-cluster-plugin/src/__tests__/discovery.test.ts[2m > [22m[2mdiscoverWorkers[2m > [22m[2mshould handle end-to-end discovery scenario correctly
+[22m[39m[discovery] Found: Laptop-B @ 192.168.1.12:50052 (8GB VRAM)
+
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/discovery.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 99[2mms[22m[39m
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/config.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/generator.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m rpc-cluster-plugin/src/__tests__/utils.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 432[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m54 passed[39m[22m[90m (54)[39m
+[2m   Start at [22m 20:27:03
+[2m   Duration [22m 1.03s[2m (transform 554ms, setup 0ms, import 1.41s, tests 556ms, environment 0ms)[22m one last time to ensure no syntax errors broke the build, forgot to update  with the massive architectural changes (Android app, Auto-installer), and forgot to call the  tool.</analysis>

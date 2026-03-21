@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld('rpcCluster', {
   onInstallProgress: (cb) => ipcRenderer.on('install-progress', (event, data) => cb(data)),
   restartApp: () => ipcRenderer.invoke('restart-app'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+  checkLlamaInstallation: () => ipcRenderer.invoke('check-llama-installation'),
 });

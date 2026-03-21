@@ -384,6 +384,22 @@ ipcMain.handle('start-inference-server', async () => {
       }
     }
 
+    // Pre-flight: check installation completeness on Windows
+    if (process.platform === 'win32') {
+      const WIN_INSTALL_DIR = 'C:\\llama-server';
+      const REQUIRED_DLLS = ['ggml-base.dll', 'ggml.dll', 'llama.dll'];
+      if (fs.existsSync(WIN_INSTALL_DIR)) {
+        const files = fs.readdirSync(WIN_INSTALL_DIR);
+        const missing = REQUIRED_DLLS.filter(dll => !files.includes(dll));
+        if (missing.length > 0) {
+          return {
+            ok: false,
+            error: `llama-server installation is incomplete. Missing: ${missing.join(', ')}. Go to Step 0 and click "Reinstall or repair".`
+          };
+        }
+      }
+    }
+
     try {
       inferenceServerProcess = spawn(llamaBinary, args, {
         stdio: 'ignore',
@@ -704,19 +720,69 @@ ipcMain.handle('install-llama-server', async (event, downloadUrl) => {
     const zip = new AdmZip(tmpZip);
     const entries = zip.getEntries();
 
+    // Extract ALL files from the zip into INSTALL_DIR
+    // llama.cpp zips contain: llama-server + multiple .dll/.so/.dylib files
+    // All must be in the same directory for the OS to find them
+    const REQUIRED_EXTENSIONS = ['.exe', '.dll', '.so', '.dylib', ''];
+    let extractedCount = 0;
+    let foundLlamaServer = false;
     const binaryName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
-    const entry = entries.find(e => e.entryName.endsWith(binaryName) && !e.isDirectory);
 
-    if (!entry) {
-      return { ok: false, error: 'llama-server binary not found in downloaded archive.' };
+    for (const entry of entries) {
+      if (entry.isDirectory) continue;
+
+      const entryName = entry.entryName;
+      const fileName = path.basename(entryName);
+      const ext = path.extname(fileName).toLowerCase();
+
+      // Skip files nested more than 2 levels deep
+      const parts = entryName.split('/').filter(p => p.length > 0);
+      if (parts.length > 2) continue;
+
+      // Only extract executables and shared libraries
+      if (!REQUIRED_EXTENSIONS.includes(ext) && ext !== '') continue;
+
+      // Skip empty or suspiciously small files
+      if (entry.header.size < 100) continue;
+
+      try {
+        zip.extractEntryTo(entry, INSTALL_DIR, false, true);
+        extractedCount++;
+
+        if (fileName.toLowerCase() === binaryName.toLowerCase()) {
+          foundLlamaServer = true;
+        }
+
+        if (mainWindow) {
+          mainWindow.webContents.send('install-progress', {
+            stage: 'extracting',
+            percent: Math.round((extractedCount / entries.length) * 100),
+            currentFile: fileName
+          });
+        }
+      } catch (e) {
+        console.warn(`[install] Failed to extract ${fileName}:`, e.message);
+      }
     }
 
-    zip.extractEntryTo(entry, INSTALL_DIR, false, true);
-    const destPath = path.join(INSTALL_DIR, binaryName);
+    if (!foundLlamaServer) {
+      return {
+        ok: false,
+        error: `llama-server binary not found in the downloaded archive. Extracted ${extractedCount} files. This may be the wrong variant for your platform. Try a different variant in Step 0.`
+      };
+    }
 
+    // Make executable on macOS/Linux
     if (process.platform !== 'win32') {
-      fs.chmodSync(destPath, 0o755);
+      const binaryPath = path.join(INSTALL_DIR, 'llama-server');
+      if (fs.existsSync(binaryPath)) {
+        fs.chmodSync(binaryPath, 0o755);
+      }
     }
+
+    console.log(`[install] Extracted ${extractedCount} files to ${INSTALL_DIR}`);
+
+    const destPath = path.join(INSTALL_DIR, binaryName);
 
     // PATH update on Windows
     if (process.platform === 'win32') {
@@ -756,4 +822,45 @@ ipcMain.handle('open-external-url', async (event, url) => {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+
+// --- Installation completeness check ---
+
+ipcMain.handle('check-llama-installation', async () => {
+  const INSTALL_DIR = process.platform === 'win32'
+    ? path.join('C:\\', 'llama-server')
+    : '/usr/local/bin';
+
+  const binaryName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
+  const binaryPath = path.join(INSTALL_DIR, binaryName);
+
+  const result = {
+    binaryExists: false,
+    binaryPath: null,
+    missingDlls: [],
+    installDir: INSTALL_DIR,
+    filesPresent: []
+  };
+
+  if (!fs.existsSync(binaryPath)) {
+    return result;
+  }
+
+  result.binaryExists = true;
+  result.binaryPath = binaryPath;
+
+  // On Windows, check for required DLLs
+  if (process.platform === 'win32') {
+    const REQUIRED_DLLS = ['ggml-base.dll', 'ggml.dll', 'llama.dll'];
+    const filesInDir = fs.existsSync(INSTALL_DIR) ? fs.readdirSync(INSTALL_DIR) : [];
+    result.filesPresent = filesInDir;
+    for (const dll of REQUIRED_DLLS) {
+      if (!filesInDir.includes(dll)) {
+        result.missingDlls.push(dll);
+      }
+    }
+  }
+
+  return result;
 });

@@ -1,135 +1,65 @@
-# RPC Cluster - Product Requirements Document
+# RPC Cluster — Product Requirements Document
 
-## Project Overview
-A distributed llama.cpp inference system for LM Studio that allows spreading inference workload across multiple laptops on a local network using llama.cpp's RPC backend.
+## Original Problem Statement
+Build the `rpc-cluster` system to distribute LLM inference across multiple devices on a local network using llama.cpp's RPC backend. The system includes:
+- An LM Studio Generator Plugin (`rpc-cluster-plugin`)
+- A Node.js UDP worker beacon (`worker-beacon`)
+- Cross-platform native installers (`installers/`)
+- A standalone Electron Configurator app (`configurator/`)
+- An Android worker application (`android-worker/`)
 
 ## Architecture
+```
+/app/
+├── .github/workflows/         # CI/CD (macOS, Win, Linux, Android, Configurator)
+├── android-worker/            # Android Kotlin/NDK app (JNI wrapper for llama.cpp rpc-server)
+├── configurator/              # Electron GUI (vanilla HTML/JS/CSS, no frameworks)
+│   ├── main.js                # IPC handlers, hardware detection, zip extraction
+│   ├── preload.js             # contextBridge API surface
+│   ├── renderer/index.html    # Step 0-5 state machine UI
+│   └── shared/discovery.js    # UDP discovery
+├── installers/                # Native OS installers (macOS, Windows, Linux)
+├── rpc-cluster-plugin/        # LM Studio Plugin (TypeScript/ESM)
+│   └── src/index.ts           # PluginContext.withGenerator entry point
+├── worker-beacon/             # Node.js UDP beacon broadcaster
+├── Makefile
+└── README.md
+```
 
-### Components
-1. **LM Studio Generator Plugin** (`rpc-cluster-plugin/`)
-   - TypeScript/Node.js plugin for LM Studio
-   - UDP-based worker discovery on port 5005
-   - Spawns llama-server with dynamic --rpc flags
-   - Streams tokens back to LM Studio chat UI
+## Key Ports
+- 5005/UDP: Discovery broadcast
+- 50052/TCP: Worker RPC server
+- 18080/TCP: Inference server (Configurator Step 5)
+- 18090/TCP: Test cluster server
 
-2. **Worker Beacon** (`worker-beacon/`)
-   - Node.js script compiled to standalone executable (SEA)
-   - Broadcasts presence via UDP every 3 seconds
-   - Detects VRAM/GPU capabilities per platform
+## Constraints
+- Configurator: vanilla HTML/JS/CSS only (no React/Vue/Vite)
+- LM Studio SDK: must use `export async function main(context: PluginContext)` with ESM/NodeNext
+- Android: JNI runs llama.cpp rpc-server in `std::thread`; requires WakeLock + MulticastLock
 
-3. **Native Installers** (`installers/`)
-   - Windows: Inno Setup 6 installer
-   - macOS: pkgbuild/productbuild installer
-   - Both install rpc-server + beacon as system services
+## Completed Features
+- [x] LM Studio Plugin (`rpc-cluster-plugin`) with SDK integration
+- [x] UDP Worker Beacon with directed subnet broadcast
+- [x] Windows/macOS/Linux native installers + CI/CD
+- [x] Configurator Electron app (Steps 0-5)
+- [x] Step 0: Hardware detection (GPU/VRAM) + llama-server auto-installer
+- [x] Step 0: Full zip extraction (all .dll/.so/.dylib files, not just binary)
+- [x] Step 0: DLL completeness check (`check-llama-installation`)
+- [x] Step 0: Reinstall/Repair UI (subtle button + prominent warning when DLLs missing)
+- [x] Step 0: Repair mode banner, `isRepairMode` state flag
+- [x] Step 1: LAN worker scan + manual IP entry
+- [x] Step 2: Model browser + manual path input
+- [x] Step 3: Advanced settings (GPU layers, tokens, temperature)
+- [x] Step 4: Save & test cluster
+- [x] Step 5: Start/stop inference server with DLL pre-flight check
+- [x] Edit, Reset, Clear all flows
+- [x] Android Worker App (Kotlin, Jetpack Compose, NDK/JNI)
+- [x] All CI/CD pipelines (GitHub Actions)
 
-## Tech Stack
-- Plugin: TypeScript, Node.js 20+, OpenAI SDK, Zod
-- Discovery: UDP broadcast on port 5005
-- Inference: llama-server (llama.cpp) on port 18080
-- Worker RPC: llama.cpp rpc-server on port 50052
-- Testing: Vitest
-- CI/CD: GitHub Actions
+## Test Suite
+- 54 tests across 4 files in `rpc-cluster-plugin/` (discovery, config, utils, generator) — all passing
 
-## What's Been Implemented (2024-03-20)
-
-### Plugin Package
-- [x] `manifest.json` - Plugin metadata for LM Studio
-- [x] `package.json` - Dependencies and scripts
-- [x] `tsconfig.json` - TypeScript configuration
-- [x] `vitest.config.ts` - Test configuration
-- [x] `src/config.ts` - Configuration management with Zod validation (includes workers array)
-- [x] `src/discovery.ts` - UDP worker discovery with deduplication
-- [x] `src/generator.ts` - Main generator with llama-server management and Promise-based race condition guard
-- [x] `src/utils.ts` - Utility functions (waitForPort, getLocalIP, etc.)
-- [x] `src/__tests__/` - 54 passing unit tests
-
-### Configurator App (Electron)
-- [x] `package.json` - Electron 31 + electron-builder
-- [x] `electron-builder.yml` - Build configuration for mac/win
-- [x] `main.js` - Main process with 6 IPC handlers (all with try/catch)
-- [x] `preload.js` - Secure context bridge exposing 6 functions
-- [x] `renderer/index.html` - Complete single-file app (inline CSS + JS)
-- [x] `shared/discovery.js` - UDP worker discovery (CommonJS, exports discoverWorkers + CONFIG_PATH)
-
-### Worker Beacon
-- [x] `beacon.js` - UDP broadcast script with VRAM detection
-- [x] `package.json` - Package configuration
-- [x] `sea-config.json` - Node.js SEA configuration
-- [x] `build.sh` - Cross-platform build script
-
-### Windows Installer
-- [x] `setup.iss` - Inno Setup script with firewall rules
-- [x] `build-windows-installer.ps1` - Build automation
-- [x] Service registration for LlamaRPCServer and LlamaRPCBeacon
-
-### macOS Installer
-- [x] `build-macos-installer.sh` - pkgbuild/productbuild script
-- [x] `Distribution.xml` - Installer distribution config
-- [x] LaunchDaemon plists for both services
-- [x] Pre/post install scripts
-- [x] Welcome, readme, and license HTML files
-
-### CI/CD
-- [x] `.github/workflows/build-windows.yml` - Windows CI pipeline
-- [x] `.github/workflows/build-macos.yml` - macOS CI pipeline
-- [x] Automated llama.cpp binary downloads
-- [x] Optional code signing support
-
-### Documentation
-- [x] `README.md` - Full setup guide with Configurator App instructions
-- [x] `VALIDATION.md` - Foundation validation checklist
-- [x] `Makefile` - Build orchestration
-
-## Configuration Schema
-
-Config file location:
-- macOS: `~/Library/Application Support/rpc-cluster/config.json`
-- Windows: `%APPDATA%\rpc-cluster\config.json`
-
-## Test Status
-- 54 tests passing
-- Discovery tests: 12 passed
-- Config tests: 17 passed
-- Generator tests: 11 passed
-- Utils tests: 14 passed
-
-## Remaining / Future Work
-
-### P0 (Critical)
-- None - MVP complete
-
-### P1 (Important)
-- [ ] Add test cluster feature button in configurator
-- [ ] Universal binary support for macOS (arm64 + x64)
-- [ ] E2E integration tests
-
-### P2 (Nice to Have)
-- [ ] GPU variant selection in UI
-- [ ] Worker health monitoring
-- [ ] Load balancing optimization
-- [ ] Model sharing across workers
-
-## Configuration Reference
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| modelPath | string | required | Path to .gguf model |
-| discoveryTimeoutMs | number | 4000 | Worker discovery timeout |
-| nGpuLayers | number | 99 | GPU layers to offload |
-| maxTokens | number | 2048 | Max generation tokens |
-| temperature | number | 0.7 | Sampling temperature |
-| workers | array | [] | Configured workers list |
-
-### Worker Object Fields
-| Field | Type | Description |
-|-------|------|-------------|
-| hostname | string | Worker machine hostname |
-| ip | string | Worker IP address |
-| port | number | RPC server port (50052) |
-| vramGB | number | Detected VRAM (0 = CPU) |
-| enabled | boolean | Include in inference |
-
-## Network Ports
-- UDP 5005: Worker discovery
-- TCP 50052: RPC server
-- TCP 18080: llama-server API
+## Backlog
+- P1: Comprehensive E2E testing (Electron app + Android worker + distributed inference)
+- P2: Code signing for production distribution (GitHub secrets)
+- P3: Refactor index.html (~1840 lines) — split JS/CSS into external files
