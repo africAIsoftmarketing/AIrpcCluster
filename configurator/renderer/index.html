@@ -658,6 +658,14 @@
       
       <div class="btn-row">
         <button id="rescan-btn" class="btn btn-secondary hidden">Rescan</button>
+        <button id="clear-all-btn" class="hidden" style="background: transparent; border: 1px solid #c62828; color: #c62828; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;">Clear all and start over</button>
+      </div>
+      <div id="clear-confirm" class="hidden" style="background: #1e1e2e; border: 1px solid #c62828; border-radius: 6px; padding: 12px; margin-top: 8px;">
+        <p style="font-size: 13px; color: #ccc; margin-bottom: 10px;">Are you sure? This clears workers, model and settings.</p>
+        <div style="display: flex; gap: 8px;">
+          <button id="clear-confirm-yes" style="background: #c62828; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;">Confirm</button>
+          <button id="clear-confirm-no" class="btn btn-secondary" style="font-size: 13px; padding: 8px 16px;">Cancel</button>
+        </div>
       </div>
     </div>
 
@@ -719,6 +727,9 @@
             <input type="number" id="discovery-ms-input" class="input" value="4000" min="1000" max="30000" step="500">
           </div>
         </div>
+        <div style="text-align: right; margin-top: 8px;">
+          <span id="reset-defaults-btn" style="color: #7c6df0; font-size: 12px; cursor: pointer; border: none; background: none;">Reset to defaults</span>
+        </div>
       </div>
     </div>
 
@@ -748,6 +759,9 @@
       <div id="save-success" class="success-box hidden">
         Configuration saved. Open LM Studio and select RPC Cluster in the model picker to start using your cluster.
       </div>
+      
+      <button id="edit-config-btn" class="hidden" style="width: 100%; background: transparent; border: 1px solid #7c6df0; color: #7c6df0; font-size: 13px; padding: 10px; border-radius: 6px; margin-top: 8px; cursor: pointer;">Edit configuration</button>
+      <div id="edit-server-warning" class="hidden" style="color: #f44336; font-size: 12px; margin-top: 6px;">Stop the inference server before editing the configuration.</div>
       
       <button id="test-btn" class="btn btn-secondary btn-full hidden" style="margin-top: 12px;">Test cluster</button>
       
@@ -877,10 +891,15 @@
       return `${home}/.config/rpc-cluster/config.json`;
     }
 
+    // Sanitize model path — strip surrounding quotes
+    function sanitizeModelPath(p) {
+      return p.trim().replace(/^["']|["']$/g, '');
+    }
+
     // Build config object
     function buildConfig() {
       return {
-        modelPath: state.modelPath,
+        modelPath: sanitizeModelPath(state.modelPath),
         nGpuLayers: state.nGpuLayers,
         maxTokens: state.maxTokens,
         temperature: state.temperature,
@@ -925,6 +944,7 @@
       
       rescanBtn.classList.remove('hidden');
       manualForm.classList.remove('hidden');
+      document.getElementById('clear-all-btn').classList.remove('hidden');
       
       if (state.workers.length === 0) {
         container.classList.add('hidden');
@@ -1070,6 +1090,8 @@
           btn.textContent = 'Saved ✓';
           successEl.classList.remove('hidden');
           testBtn.classList.remove('hidden');
+          document.getElementById('edit-config-btn').classList.remove('hidden');
+          document.getElementById('edit-server-warning').classList.add('hidden');
           updateServerButton();
         } else {
           throw new Error(result.error);
@@ -1234,6 +1256,104 @@
       });
     }
 
+    // Edit configuration — exit saved state and allow edits
+    function editConfiguration() {
+      if (state.serverRunning) {
+        document.getElementById('edit-server-warning').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('edit-server-warning').classList.add('hidden');
+
+      state.configSaved = false;
+      
+      // Reset save button
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.classList.remove('btn-success', 'btn-error');
+      saveBtn.classList.add('btn-primary');
+      saveBtn.textContent = 'Save configuration';
+      saveBtn.disabled = false;
+      
+      // Hide post-save elements
+      document.getElementById('save-success').classList.add('hidden');
+      document.getElementById('save-error').classList.add('hidden');
+      document.getElementById('test-btn').classList.add('hidden');
+      document.getElementById('test-result').classList.add('hidden');
+      document.getElementById('edit-config-btn').classList.add('hidden');
+
+      // Disable server button
+      updateServerButton();
+      
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Reset advanced settings to defaults
+    function resetDefaults() {
+      state.nGpuLayers = 99;
+      state.maxTokens = 2048;
+      state.temperature = 0.7;
+      state.discoveryTimeoutMs = 4000;
+      
+      document.getElementById('gpu-layers-input').value = 99;
+      document.getElementById('max-tokens-input').value = 2048;
+      document.getElementById('temperature-input').value = 0.7;
+      document.getElementById('discovery-ms-input').value = 4000;
+      
+      updateSummary();
+    }
+
+    // Clear all state and start over
+    function clearAllState() {
+      state.workers = [];
+      state.modelPath = '';
+      state.nGpuLayers = 99;
+      state.maxTokens = 2048;
+      state.temperature = 0.7;
+      state.discoveryTimeoutMs = 4000;
+      state.configSaved = false;
+      state.serverRunning = false;
+      state.serverUrl = null;
+      
+      // Clear form inputs
+      document.getElementById('model-path-input').value = '';
+      document.getElementById('gpu-layers-input').value = 99;
+      document.getElementById('max-tokens-input').value = 2048;
+      document.getElementById('temperature-input').value = 0.7;
+      document.getElementById('discovery-ms-input').value = 4000;
+      
+      // Reset workers display
+      document.getElementById('workers-container').classList.add('hidden');
+      document.getElementById('no-workers-warning').classList.add('hidden');
+      document.getElementById('rescan-btn').classList.add('hidden');
+      document.getElementById('clear-all-btn').classList.add('hidden');
+      document.getElementById('manual-worker-form').classList.add('hidden');
+      document.getElementById('clear-confirm').classList.add('hidden');
+
+      // Reset models display
+      document.getElementById('models-container').classList.add('hidden');
+      document.getElementById('no-models-info').classList.add('hidden');
+      
+      // Reset save button
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.classList.remove('btn-success', 'btn-error');
+      saveBtn.classList.add('btn-primary');
+      saveBtn.textContent = 'Save configuration';
+      saveBtn.disabled = false;
+      
+      // Hide post-save elements
+      document.getElementById('save-success').classList.add('hidden');
+      document.getElementById('save-error').classList.add('hidden');
+      document.getElementById('test-btn').classList.add('hidden');
+      document.getElementById('test-result').classList.add('hidden');
+      document.getElementById('edit-config-btn').classList.add('hidden');
+      document.getElementById('edit-server-warning').classList.add('hidden');
+
+      // Reset server state to idle
+      showServerState('idle');
+      updateServerButton();
+      updateSummary();
+    }
+
     // Initialize
     async function init() {
       // Display config path
@@ -1269,6 +1389,7 @@
         saveBtn.textContent = 'Saved ✓';
         document.getElementById('save-success').classList.remove('hidden');
         document.getElementById('test-btn').classList.remove('hidden');
+        document.getElementById('edit-config-btn').classList.remove('hidden');
         
         // Enable server button since config is saved
         updateServerButton();
@@ -1328,7 +1449,20 @@
       document.getElementById('browse-models-btn').addEventListener('click', listModels);
       document.getElementById('refresh-models-btn').addEventListener('click', listModels);
       document.getElementById('save-btn').addEventListener('click', saveConfig);
+      document.getElementById('edit-config-btn').addEventListener('click', editConfiguration);
       document.getElementById('test-btn').addEventListener('click', testCluster);
+      document.getElementById('reset-defaults-btn').addEventListener('click', resetDefaults);
+
+      // Clear all — inline confirmation
+      document.getElementById('clear-all-btn').addEventListener('click', () => {
+        document.getElementById('clear-confirm').classList.remove('hidden');
+      });
+      document.getElementById('clear-confirm-yes').addEventListener('click', () => {
+        clearAllState();
+      });
+      document.getElementById('clear-confirm-no').addEventListener('click', () => {
+        document.getElementById('clear-confirm').classList.add('hidden');
+      });
       document.getElementById('open-folder-link').addEventListener('click', openConfigFolder);
       document.getElementById('footer-open-folder').addEventListener('click', openConfigFolder);
       
@@ -1347,9 +1481,13 @@
         copyToClipboard(document.getElementById('curl-block').textContent, e.target);
       });
       
-      // Model path input
+      // Model path input — sanitize and deselect radio buttons
       document.getElementById('model-path-input').addEventListener('input', (e) => {
-        state.modelPath = e.target.value;
+        state.modelPath = sanitizeModelPath(e.target.value);
+        e.target.value = state.modelPath;
+        // Deselect any radio button in the model list
+        document.querySelectorAll('#models-list input[type="radio"]').forEach(r => { r.checked = false; });
+        document.querySelectorAll('#models-list .model-item').forEach(el => { el.classList.remove('selected'); });
         updateSummary();
       });
       

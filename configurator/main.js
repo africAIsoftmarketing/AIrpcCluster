@@ -166,6 +166,11 @@ ipcMain.handle('list-models', async () => {
 
 ipcMain.handle('save-config', async (event, config) => {
   try {
+    // Sanitize model path — strip surrounding quotes
+    if (config.modelPath) {
+      config.modelPath = config.modelPath.trim().replace(/^["']|["']$/g, '');
+    }
+
     const configDir = path.dirname(CONFIG_PATH);
     
     if (!fs.existsSync(configDir)) {
