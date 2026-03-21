@@ -41,7 +41,7 @@ Distribute LLM inference across multiple laptops on your local network using lla
 - A `.gguf` model file
 
 ### Worker Machines
-- Windows 10/11 (64-bit) or macOS 13+ (Ventura)
+- Windows 10/11 (64-bit) or macOS 13+ (Ventura) or Linux (Ubuntu 20.04+, 64-bit)
 - No additional software required - the installer handles everything
 
 ## Quick Start
@@ -55,7 +55,23 @@ Download the appropriate installer for each worker laptop:
 
 Run the installer. The RPC server and discovery beacon will start automatically as system services.
 
-### 2. Install the LM Studio Plugin
+### 2. Configure with the Configurator App
+
+Download and open **RPC Cluster Configurator** (the Electron app included in releases).
+
+1. Click **Scan LAN** to discover all worker machines on your network
+2. Review the discovered workers - each shows hostname, IP, and VRAM
+3. Enable/disable individual workers using the checkboxes
+4. Select a model from the list of `.gguf` files detected in your LM Studio models folder
+5. Adjust inference settings (GPU layers, max tokens, temperature) if needed
+6. Click **Save configuration** — then close the Configurator and open LM Studio
+
+The configuration is saved to:
+- **macOS**: `~/Library/Application Support/rpc-cluster/config.json`
+- **Windows**: `%APPDATA%\rpc-cluster\config.json`
+- **Linux**: `~/.config/rpc-cluster/config.json`
+
+### 3. Install the LM Studio Plugin
 
 ```bash
 # Clone this repository
@@ -70,22 +86,7 @@ npm install
 npm run dev
 ```
 
-The plugin will be available in LM Studio while `npm run dev` (which runs `lms dev`) is active. For production deployment, build the plugin and follow LM Studio's plugin installation guide.
-
-### 3. Configure with the Configurator App
-
-Download and open **RPC Cluster Configurator** (the Electron app included in releases).
-
-1. Click **Scan LAN** to discover all worker machines on your network
-2. Review the discovered workers - each shows hostname, IP, and VRAM
-3. Enable/disable individual workers using the checkboxes
-4. Select a model from the **Model** dropdown (lists `.gguf` files from your LM Studio models directory)
-5. Adjust inference settings (GPU layers, max tokens, temperature) if needed
-6. Click **Save & Launch** to write the configuration and open LM Studio
-
-The configuration is saved to:
-- **macOS**: `~/Library/Application Support/rpc-cluster/config.json`
-- **Windows**: `%APPDATA%\rpc-cluster\config.json`
+The plugin will be available in LM Studio while `npm run dev` (which runs `lms dev`) is active.
 
 ### 4. Start Using
 
