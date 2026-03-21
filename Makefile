@@ -1,25 +1,28 @@
 # RPC Cluster - Distributed llama.cpp Inference
 # Makefile for building all components
 
-.PHONY: all plugin beacon configurator installer-win installer-macos clean dev test help
+.PHONY: all plugin beacon configurator configurator-mac configurator-win configurator-dev installer-win installer-macos clean dev test help
 
 # Default target
-all: plugin beacon configurator
+all: plugin beacon configurator configurator-mac configurator-win
 
 # Help target
 help:
 	@echo "RPC Cluster Build Targets:"
 	@echo ""
-	@echo "  make plugin         - Build the LM Studio plugin (TypeScript)"
-	@echo "  make beacon         - Build the worker beacon executable"
-	@echo "  make configurator   - Build the Configurator Electron app"
-	@echo "  make installer-win  - Build Windows installer (requires Windows + Inno Setup)"
-	@echo "  make installer-macos- Build macOS installer (requires macOS)"
-	@echo "  make all            - Build plugin, beacon, and configurator"
-	@echo "  make test           - Run plugin tests"
-	@echo "  make dev            - Run plugin in development mode"
-	@echo "  make dev-config     - Run configurator in development mode"
-	@echo "  make clean          - Remove all build artifacts"
+	@echo "  make plugin            - Build the LM Studio plugin (TypeScript)"
+	@echo "  make beacon            - Build the worker beacon executable"
+	@echo "  make configurator      - Build the Configurator Electron app"
+	@echo "  make configurator-mac  - Build Configurator macOS DMG"
+	@echo "  make configurator-win  - Build Configurator Windows installer"
+	@echo "  make configurator-dev  - Run Configurator in development mode"
+	@echo "  make installer-win     - Build Windows worker installer (requires Windows + Inno Setup)"
+	@echo "  make installer-macos   - Build macOS worker installer (requires macOS)"
+	@echo "  make all               - Build plugin, beacon, configurator, and configurator distributables"
+	@echo "  make test              - Run plugin tests"
+	@echo "  make dev               - Run plugin in development mode"
+	@echo "  make dev-config        - Run configurator in development mode"
+	@echo "  make clean             - Remove all build artifacts"
 	@echo ""
 	@echo "Note: Installer targets require platform-specific tools:"
 	@echo "  - Windows: Inno Setup 6 (choco install innosetup)"
@@ -57,6 +60,21 @@ configurator:
 dev-config:
 	@echo "=== Starting Configurator ==="
 	cd configurator && npm start
+
+# Alias for dev-config
+configurator-dev:
+	@echo "=== Starting Configurator ==="
+	cd configurator && npm start
+
+# Build Configurator macOS DMG
+configurator-mac:
+	@echo "=== Building Configurator macOS DMG ==="
+	cd configurator && npm run build:mac
+
+# Build Configurator Windows installer
+configurator-win:
+	@echo "=== Building Configurator Windows Installer ==="
+	cd configurator && npm run build:win
 
 # Build Windows installer (must run on Windows)
 installer-win:
@@ -114,6 +132,7 @@ vendor-dirs:
 	@echo "=== Creating Vendor Directories ==="
 	mkdir -p vendor/windows
 	mkdir -p vendor/macos
+	mkdir -p vendor/linux
 	@echo ""
 	@echo "Please download llama.cpp binaries from:"
 	@echo "  https://github.com/ggerganov/llama.cpp/releases"
@@ -121,3 +140,4 @@ vendor-dirs:
 	@echo "Place the following files:"
 	@echo "  vendor/windows/rpc-server.exe"
 	@echo "  vendor/macos/rpc-server"
+	@echo "  vendor/linux/rpc-server"

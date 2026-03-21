@@ -1,13 +1,37 @@
 appId: com.rpccluster.configurator
 productName: RPC Cluster
+
 mac:
   category: public.app-category.utilities
-  target: dmg
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+
 win:
-  target: nsis
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # To add icons: place icon.ico (Windows) in configurator/build/
+  # and uncomment the lines below
+  # installerIcon: build/icon.ico
+  # uninstallerIcon: build/icon.ico
+
+dmg:
+  # To add a DMG background: place background.png in configurator/build/
+  # and uncomment the line below
+  # background: build/background.png
+  window:
+    width: 540
+    height: 380
+
 files:
   - main.js
   - preload.js
   - renderer/**
   - shared/**
+
 extraResources: []
