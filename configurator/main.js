@@ -431,7 +431,7 @@ ipcMain.handle('start-model', async (event, id) => {
 
   // DLL pre-flight check (Windows)
   if (process.platform === 'win32') {
-    const WIN_INSTALL_DIR = 'C:\llama-server';
+    const WIN_INSTALL_DIR = path.join('C:\\', 'llama-server');
     const REQUIRED_DLLS = ['ggml-base.dll', 'ggml.dll', 'llama.dll'];
     if (fs.existsSync(WIN_INSTALL_DIR)) {
       const files = fs.readdirSync(WIN_INSTALL_DIR);
@@ -451,11 +451,20 @@ ipcMain.handle('start-model', async (event, id) => {
     const cmd = process.platform === 'win32' ? 'where llama-server' : 'which llama-server';
     execSync(cmd, { encoding: 'utf-8' });
   } catch (e) {
-    const knownPath = process.platform === 'win32'
-      ? 'C:\llama-server\llama-server.exe'
-      : '/usr/local/bin/llama-server';
+    const INSTALL_DIR = process.platform === 'win32'
+      ? path.join('C:\\', 'llama-server')
+      : '/usr/local/bin';
+    const binaryName = process.platform === 'win32'
+      ? 'llama-server.exe' : 'llama-server';
+    const knownPath = path.join(INSTALL_DIR, binaryName);
+
     if (fs.existsSync(knownPath)) {
       llamaBinary = knownPath;
+      // Inject into process.env.PATH for future calls
+      if (!process.env.PATH.includes(INSTALL_DIR)) {
+        process.env.PATH = process.env.PATH + path.delimiter + INSTALL_DIR;
+      }
+      console.log('[start-model] Using known path:', llamaBinary);
     } else {
       return { ok: false, error: 'llama-server not found. Complete the host setup in Step 0.' };
     }
@@ -568,7 +577,7 @@ ipcMain.handle('detect-host-hardware', async () => {
   } catch (e) {
     // Also check known install location
     const knownPath = process.platform === 'win32'
-      ? 'C:\\llama-server\\llama-server.exe'
+      ? path.join('C:\\', 'llama-server', 'llama-server.exe')
       : '/usr/local/bin/llama-server';
     if (fs.existsSync(knownPath)) {
       result.llamaServerFound = true;
@@ -834,10 +843,49 @@ ipcMain.handle('install-llama-server', async (event, downloadUrl) => {
       if (mainWindow) {
         mainWindow.webContents.send('install-progress', { stage: 'configuring', percent: 90 });
       }
+      // Read current system PATH from registry and append INSTALL_DIR
+      const psCmd = [
+        '$currentPath = [Environment]::GetEnvironmentVariable("PATH", "Machine");',
+        `if ($currentPath -notlike "*${INSTALL_DIR}*") {`,
+        `  [Environment]::SetEnvironmentVariable("PATH", "$currentPath;${INSTALL_DIR}", "Machine");`,
+        '  Write-Output "PATH updated"',
+        '} else {',
+        '  Write-Output "Already in PATH"',
+        '}'
+      ].join(' ');
+
       try {
-        execSync(`setx PATH "%PATH%;${INSTALL_DIR}" /M`, { encoding: 'utf-8' });
+        const result = execSync(
+          `powershell -NoProfile -Command "${psCmd}"`,
+          { encoding: 'utf-8', timeout: 10000 }
+        );
+        console.log('[install] PATH update:', result.trim());
       } catch (e) {
-        try { execSync(`setx PATH "%PATH%;${INSTALL_DIR}"`, { encoding: 'utf-8' }); } catch (e2) {}
+        // Fallback: user-level PATH (does not require admin)
+        const psCmdUser = [
+          '$currentPath = [Environment]::GetEnvironmentVariable("PATH", "User");',
+          `if ($currentPath -notlike "*${INSTALL_DIR}*") {`,
+          `  [Environment]::SetEnvironmentVariable("PATH", "$currentPath;${INSTALL_DIR}", "User");`,
+          '  Write-Output "User PATH updated"',
+          '} else {',
+          '  Write-Output "Already in user PATH"',
+          '}'
+        ].join(' ');
+        try {
+          execSync(
+            `powershell -NoProfile -Command "${psCmdUser}"`,
+            { encoding: 'utf-8', timeout: 10000 }
+          );
+          console.log('[install] Fallback to user PATH update');
+        } catch (e2) {
+          console.warn('[install] PATH update failed:', e2.message);
+        }
+      }
+
+      // Make llama-server available in current process immediately
+      if (!process.env.PATH.includes(INSTALL_DIR)) {
+        process.env.PATH = process.env.PATH + path.delimiter + INSTALL_DIR;
+        console.log('[install] Added to current process PATH:', INSTALL_DIR);
       }
     }
 
