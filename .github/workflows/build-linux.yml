@@ -56,10 +56,12 @@ jobs:
           VARIANT="${{ github.event.inputs.llama_cpp_variant || 'cpu' }}"
 
           case "$VARIANT" in
-            cuda-cu11.7) PATTERN="linux-cuda-cu11.7-x64" ;;
-            cuda-cu12.4) PATTERN="linux-cuda-cu12.4-x64" ;;
-            vulkan)      PATTERN="linux-vulkan-x64" ;;
-            *)           PATTERN="linux-x64" ;;
+            cuda-cu11.7|cuda-cu12.4)
+              echo "⚠️ CUDA prebuilts for Linux not available anymore. Falling back to CPU variant."
+              PATTERN="ubuntu-x64"
+              ;;
+            vulkan)      PATTERN="ubuntu-vulkan-x64" ;;
+            *)           PATTERN="ubuntu-x64" ;;
           esac
 
           echo "Looking for asset matching pattern: $PATTERN"
@@ -151,7 +153,6 @@ jobs:
           chmod +x "dist/$STAGING/install.sh"
 
           # Patch install.sh paths so it works from the extracted directory
-          # (the distributed install.sh finds binaries relative to itself)
           sed -i 's|RPC_SERVER_SRC="$ROOT_DIR/vendor/linux/rpc-server"|RPC_SERVER_SRC="$SCRIPT_DIR/rpc-server"|' "dist/$STAGING/install.sh"
           sed -i 's|BEACON_SRC="$ROOT_DIR/worker-beacon/dist/rpc-worker-beacon-linux"|BEACON_SRC="$SCRIPT_DIR/rpc-worker-beacon"|' "dist/$STAGING/install.sh"
 
