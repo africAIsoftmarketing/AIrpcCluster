@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawn, execSync } = require('child_process');
 const net = require('net');
-const { discoverWorkers, CONFIG_PATH } = require('./shared/discovery');
+const { discoverWorkers, probeCloudWorker, scanCloudWorkers, CONFIG_PATH } = require('./shared/discovery');
 
 let mainWindow = null;
 const inferenceProcesses = new Map();
@@ -146,6 +146,26 @@ app.on('before-quit', () => {
 ipcMain.handle('scan-workers', async () => {
   try {
     const workers = await discoverWorkers(4000);
+    return workers;
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+// Probe a single cloud worker by IP:port (TCP direct, no UDP broadcast needed)
+ipcMain.handle('probe-cloud-worker', async (event, { ip, port }) => {
+  try {
+    const worker = await probeCloudWorker(ip, port || 50052, 6000);
+    return worker ? { ok: true, worker } : { ok: false, error: `Port ${port || 50052} unreachable at ${ip}` };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Probe multiple cloud workers in parallel
+ipcMain.handle('scan-cloud-workers', async (event, targets) => {
+  try {
+    const workers = await scanCloudWorkers(targets, 6000);
     return workers;
   } catch (err) {
     return { error: err.message };
