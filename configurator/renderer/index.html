@@ -850,6 +850,25 @@
               <span style="color: #888;">On the worker, run: <code>node worker-beacon/beacon.js</code><br>Look for: "Broadcast address: 192.168.x.255" — must match your subnet</span></li>
           </ul>
           <p style="margin-top: 12px; font-size: 13px;">You can also add workers manually using the form below.</p>
+          
+          <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 6px; padding: 12px; margin-top: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+              </svg>
+              <span style="color: #3b82f6; font-weight: 500; font-size: 13px;">Using a Cloud GPU instance?</span>
+            </div>
+            <p style="font-size: 12px; color: #aaa; line-height: 1.6; margin: 0;">
+              Cloud instances (Vast.ai, RunPod, Lambda Labs) cannot be discovered via LAN broadcast.<br>
+              Use the <strong style="color: #3b82f6;">Cloud Instance</strong> panel below to connect by entering the public IP.<br><br>
+              <strong style="color: #ccc;">Requirements:</strong>
+            </p>
+            <ul style="margin: 6px 0 0 20px; font-size: 12px; color: #aaa; line-height: 1.6;">
+              <li>Open port <strong style="color: #e8e8e8;">50052 (TCP)</strong> on your cloud instance</li>
+              <li>Configure the provider's firewall to allow inbound traffic on this port</li>
+              <li>Ensure the RPC worker is running on the cloud instance</li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -871,6 +890,41 @@
           </div>
           <button id="add-manual-worker-btn" class="btn btn-secondary" style="height: 38px; white-space: nowrap;">Add worker</button>
         </div>
+      </div>
+
+      <!-- Cloud Instance Panel -->
+      <div id="cloud-worker-panel" class="hidden" style="background: linear-gradient(135deg, #1a2332 0%, #1e1e2e 100%); border: 1px solid #3b82f6; border-radius: 8px; padding: 16px; margin-top: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+          </svg>
+          <div style="font-size: 14px; font-weight: 500; color: #e8e8e8;">Cloud Instance</div>
+          <span style="font-size: 11px; color: #3b82f6; background: rgba(59, 130, 246, 0.15); padding: 2px 8px; border-radius: 4px;">Vast.ai / RunPod / Lambda Labs</span>
+        </div>
+        <div style="font-size: 12px; color: #888; margin-bottom: 12px;">Connect to a remote GPU instance via public IP. Make sure port 50052 (TCP) is open.</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+          <div style="flex: 2; min-width: 140px;">
+            <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Public IP</label>
+            <input id="cloud-worker-ip" type="text" placeholder="123.45.67.89" class="input" style="width: 100%; border-color: #3b82f6;">
+          </div>
+          <div style="flex: 1; min-width: 80px;">
+            <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Port</label>
+            <input id="cloud-worker-port" type="number" value="50052" class="input" style="width: 100%;">
+          </div>
+          <div style="flex: 1; min-width: 80px;">
+            <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">VRAM (GB)</label>
+            <input id="cloud-worker-vram" type="number" placeholder="24" class="input" style="width: 100%;">
+          </div>
+          <button id="probe-cloud-worker-btn" class="btn btn-primary" style="height: 38px; white-space: nowrap; background: #3b82f6;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            Probe &amp; Add
+          </button>
+        </div>
+        <div id="cloud-probe-status" class="hidden" style="margin-top: 12px;"></div>
       </div>
       
       <div class="btn-row">
@@ -1305,9 +1359,11 @@
       const warning = document.getElementById('no-workers-warning');
       const rescanBtn = document.getElementById('rescan-btn');
       const manualForm = document.getElementById('manual-worker-form');
+      const cloudPanel = document.getElementById('cloud-worker-panel');
 
       rescanBtn.classList.remove('hidden');
       manualForm.classList.remove('hidden');
+      cloudPanel.classList.remove('hidden');
       document.getElementById('clear-all-btn').classList.remove('hidden');
 
       if (state.workers.length === 0) {
@@ -1318,7 +1374,7 @@
         warning.classList.add('hidden');
 
         tbody.innerHTML = state.workers.map((worker, index) => '<tr>' +
-            '<td>' + escapeHtml(worker.hostname) + '</td>' +
+            '<td>' + escapeHtml(worker.hostname) + (worker.source === 'cloud-probe' ? ' <span style="color: #3b82f6; font-size: 10px;">(cloud)</span>' : '') + '</td>' +
             '<td>' + worker.ip + ':' + worker.port + '</td>' +
             '<td>' + (worker.vramGB > 0 ? worker.vramGB + ' GB' : 'CPU only') + '</td>' +
             '<td>' + getPlatformName(worker.platform) + '</td>' +
@@ -2041,6 +2097,67 @@
         hostnameInput.value = '';
         portInput.value = '50052';
         renderWorkers();
+      });
+
+      // Cloud Instance: Probe & Add
+      document.getElementById('probe-cloud-worker-btn').addEventListener('click', async () => {
+        var ipInput = document.getElementById('cloud-worker-ip');
+        var portInput = document.getElementById('cloud-worker-port');
+        var vramInput = document.getElementById('cloud-worker-vram');
+        var statusEl = document.getElementById('cloud-probe-status');
+        var btn = document.getElementById('probe-cloud-worker-btn');
+
+        var ip = ipInput.value.trim();
+        if (!ip) { ipInput.focus(); return; }
+        var port = parseInt(portInput.value, 10) || 50052;
+        var vram = parseInt(vramInput.value, 10) || 0;
+
+        // Show probing status
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spinner" style="width: 12px; height: 12px; margin-right: 6px;"></div> Probing...';
+        statusEl.classList.remove('hidden');
+        statusEl.innerHTML = '<div style="color: #888; font-size: 13px;">Connecting to ' + escapeHtml(ip) + ':' + port + '...</div>';
+
+        try {
+          var result = await window.rpcCluster.probeCloudWorker(ip, port);
+          if (result.ok) {
+            // Success: add the worker
+            var worker = result.worker;
+            if (vram > 0) worker.vramGB = vram;
+            worker.hostname = ip + ' (Cloud)';
+            
+            // Check if already exists
+            var exists = state.workers.some(w => w.ip === ip && w.port === port);
+            if (!exists) {
+              state.workers.push(worker);
+            }
+            
+            statusEl.innerHTML = '<div style="background: rgba(76, 175, 80, 0.1); border: 1px solid #4caf50; border-radius: 6px; padding: 10px; color: #4caf50; font-size: 13px;">' +
+              '<strong>&#10003; Success!</strong> Cloud worker added: ' + escapeHtml(ip) + ':' + port +
+              (vram > 0 ? ' (' + vram + ' GB VRAM)' : '') + '</div>';
+            
+            // Clear inputs
+            ipInput.value = '';
+            vramInput.value = '';
+            
+            renderWorkers();
+          } else {
+            // Error
+            statusEl.innerHTML = '<div style="background: rgba(244, 67, 54, 0.1); border: 1px solid #f44336; border-radius: 6px; padding: 10px; color: #f44336; font-size: 13px;">' +
+              '<strong>&#10007; Connection failed</strong><br>' +
+              '<span style="color: #ccc;">' + escapeHtml(result.error) + '</span><br><br>' +
+              '<span style="color: #aaa; font-size: 12px;">Make sure:<br>' +
+              '• Port 50052 (TCP) is open on the cloud instance<br>' +
+              '• The provider firewall allows inbound traffic<br>' +
+              '• The RPC worker is running on the instance</span></div>';
+          }
+        } catch (err) {
+          statusEl.innerHTML = '<div style="background: rgba(244, 67, 54, 0.1); border: 1px solid #f44336; border-radius: 6px; padding: 10px; color: #f44336; font-size: 13px;">' +
+            '<strong>&#10007; Error</strong><br><span style="color: #ccc;">' + escapeHtml(err.message) + '</span></div>';
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Probe &amp; Add';
+        }
       });
 
       // Step 2: Model management

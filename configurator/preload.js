@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('rpcCluster', {
   scanWorkers: () => ipcRenderer.invoke('scan-workers'),
+  probeCloudWorker: (ip, port) => ipcRenderer.invoke('probe-cloud-worker', { ip, port }),
+  scanCloudWorkers: (targets) => ipcRenderer.invoke('scan-cloud-workers', targets),
   listModels: () => ipcRenderer.invoke('list-models'),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
   loadConfig: () => ipcRenderer.invoke('load-config'),
