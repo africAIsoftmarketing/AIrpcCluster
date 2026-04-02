@@ -157,7 +157,67 @@ function discoverWorkers(timeoutMs = 4000) {
   });
 }
 
+/**
+ * Probe a single cloud worker by connecting directly via TCP to its RPC port.
+ * Works for remote instances (Vast.ai, RunPod, Lambda Labs, etc.) where
+ * UDP broadcast cannot cross the internet.
+ *
+ * @param {string} ip   - Public IP of the cloud instance
+ * @param {number} port - RPC server port (default 50052)
+ * @param {number} timeoutMs - Connection timeout per attempt
+ * @returns {Promise<object|null>} Worker object or null if unreachable
+ */
+function probeCloudWorker(ip, port = 50052, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    const socket = new (require('net').Socket)();
+    let settled = false;
+
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch (_) {}
+      resolve(result);
+    };
+
+    socket.setTimeout(timeoutMs);
+
+    socket.on('connect', () => {
+      // Port is open — the RPC server is reachable
+      done({
+        hostname: ip,          // will be enriched by beacon data if available
+        ip,
+        port,
+        vramGB: 0,             // unknown without beacon; user can check logs
+        platform: 'linux',     // cloud instances are almost always Linux
+        enabled: true,
+        source: 'cloud-probe'
+      });
+    });
+
+    socket.on('error', () => done(null));
+    socket.on('timeout', () => done(null));
+
+    socket.connect(port, ip);
+  });
+}
+
+/**
+ * Scan a list of cloud workers in parallel.
+ *
+ * @param {Array<{ip:string, port?:number}>} targets
+ * @param {number} timeoutMs
+ * @returns {Promise<Array>} Reachable workers
+ */
+async function scanCloudWorkers(targets, timeoutMs = 5000) {
+  const results = await Promise.all(
+    targets.map(t => probeCloudWorker(t.ip, t.port || 50052, timeoutMs))
+  );
+  return results.filter(Boolean);
+}
+
 module.exports = {
   discoverWorkers,
+  probeCloudWorker,
+  scanCloudWorkers,
   CONFIG_PATH
 };
