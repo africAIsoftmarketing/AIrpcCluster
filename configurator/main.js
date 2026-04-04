@@ -687,24 +687,61 @@ ipcMain.handle('detect-host-hardware', async () => {
 
 // --- llama.cpp download URL resolver ---
 
+// Centralized asset name mapping - single place to update if GitHub changes naming
+const ASSET_NAME_MAP = {
+  win32: {
+    'cpu':         (v) => `llama-${v}-bin-win-cpu-x64.zip`,
+    'cuda-cu11.7': (v) => `llama-${v}-bin-win-cuda-11.7-x64.zip`,
+    'cuda-cu12.4': (v) => `llama-${v}-bin-win-cuda-12.4-x64.zip`,
+    'vulkan':      (v) => `llama-${v}-bin-win-vulkan-x64.zip`,
+  },
+  darwin: {
+    'metal': (v) => `llama-${v}-bin-macos-arm64.zip`,
+    'cpu':   (v) => `llama-${v}-bin-macos-x64.zip`,
+  },
+  linux: {
+    'cpu':         (v) => `llama-${v}-bin-linux-x64.zip`,
+    'cuda-cu12.4': (v) => `llama-${v}-bin-linux-cuda-12.4-x64.zip`,
+    'vulkan':      (v) => `llama-${v}-bin-linux-vulkan-x64.zip`,
+  }
+};
+
+// Build fuzzy search keywords from variant and platform
+function buildAssetKeywords(variant, platform) {
+  const keywords = [];
+  
+  // Platform keywords
+  if (platform === 'win32') keywords.push('win');
+  else if (platform === 'darwin') keywords.push('macos');
+  else keywords.push('linux');
+  
+  // Architecture
+  if (platform === 'darwin' && variant === 'metal') {
+    keywords.push('arm64');
+  } else {
+    keywords.push('x64');
+  }
+  
+  // Variant-specific keywords
+  if (variant.includes('cuda')) {
+    keywords.push('cuda');
+    // Extract version number (e.g., '12.4' from 'cuda-cu12.4')
+    const cudaMatch = variant.match(/(\d+\.\d+)/);
+    if (cudaMatch) keywords.push(cudaMatch[1]);
+  } else if (variant === 'vulkan') {
+    keywords.push('vulkan');
+  } else if (variant === 'metal') {
+    // Metal is implicit in macos-arm64
+  } else if (variant === 'cpu') {
+    keywords.push('cpu');
+  }
+  
+  return keywords;
+}
+
 ipcMain.handle('get-llama-download-url', async (event, variant) => {
   const https = require('https');
-
-  const WIN_PATTERNS = {
-    'cpu':         'llama-{version}-bin-win-cpu-x64.zip',
-    'cuda-cu11.7': 'llama-{version}-bin-win-cuda-cu11.7-x64.zip',
-    'cuda-cu12.4': 'llama-{version}-bin-win-cuda-cu12.4-x64.zip',
-    'vulkan':      'llama-{version}-bin-win-vulkan-x64.zip',
-  };
-  const MAC_PATTERNS = {
-    'metal': 'llama-{version}-bin-macos-arm64.zip',
-    'cpu':   'llama-{version}-bin-macos-x64.zip',
-  };
-  const LINUX_PATTERNS = {
-    'cpu':         'llama-{version}-bin-linux-x64.zip',
-    'cuda-cu12.4': 'llama-{version}-bin-linux-cuda-cu12.4-x64.zip',
-    'vulkan':      'llama-{version}-bin-linux-vulkan-x64.zip',
-  };
+  const DEBUG = process.env.RPC_CLUSTER_DEBUG === '1';
 
   try {
     const releaseData = await new Promise((resolve, reject) => {
@@ -723,21 +760,78 @@ ipcMain.handle('get-llama-download-url', async (event, variant) => {
     });
 
     const version = releaseData.tag_name;
-    const patterns = process.platform === 'win32' ? WIN_PATTERNS
-      : process.platform === 'darwin' ? MAC_PATTERNS : LINUX_PATTERNS;
-    const pattern = patterns[variant] ?? patterns['cpu'];
-    const filename = pattern.replace('{version}', version);
-
-    const asset = releaseData.assets.find(a =>
-      a.name === filename ||
-      a.name.toLowerCase().includes(filename.replace(`llama-${version}-bin-`, '').replace('.zip', '').toLowerCase())
-    );
-
-    if (!asset) {
-      return { ok: false, error: `No asset found for "${variant}" in release ${version}`, allAssets: releaseData.assets.map(a => a.name) };
+    
+    // Debug: log all available assets
+    if (DEBUG) {
+      console.log('[get-llama-download-url] Available assets:');
+      releaseData.assets.forEach(a => console.log(`  - ${a.name}`));
     }
 
-    return { ok: true, url: asset.browser_download_url, filename: asset.name, version, sizeMB: Math.round(asset.size / 1e6) };
+    // Get the asset name generator for this platform
+    const platformMap = ASSET_NAME_MAP[process.platform] || ASSET_NAME_MAP.linux;
+    const getAssetName = platformMap[variant] || platformMap['cpu'];
+    const expectedFilename = getAssetName(version);
+
+    if (DEBUG) {
+      console.log(`[get-llama-download-url] Looking for: ${expectedFilename}`);
+    }
+
+    // Try exact match first
+    let asset = releaseData.assets.find(a => a.name === expectedFilename);
+
+    // Fallback 1: case-insensitive exact match
+    if (!asset) {
+      asset = releaseData.assets.find(a => 
+        a.name.toLowerCase() === expectedFilename.toLowerCase()
+      );
+    }
+
+    // Fallback 2: fuzzy match using keywords
+    if (!asset) {
+      const keywords = buildAssetKeywords(variant, process.platform);
+      if (DEBUG) {
+        console.log(`[get-llama-download-url] Fuzzy search with keywords: ${keywords.join(', ')}`);
+      }
+      
+      asset = releaseData.assets.find(a => {
+        const name = a.name.toLowerCase();
+        // Must be a zip file
+        if (!name.endsWith('.zip')) return false;
+        // Must contain all keywords
+        return keywords.every(kw => name.includes(kw.toLowerCase()));
+      });
+    }
+
+    if (!asset) {
+      // Build helpful error message with available assets
+      const platformAssets = releaseData.assets
+        .filter(a => a.name.endsWith('.zip'))
+        .filter(a => {
+          const name = a.name.toLowerCase();
+          if (process.platform === 'win32') return name.includes('win');
+          if (process.platform === 'darwin') return name.includes('macos');
+          return name.includes('linux');
+        })
+        .map(a => a.name);
+      
+      const allAssets = releaseData.assets.filter(a => a.name.endsWith('.zip')).map(a => a.name);
+      
+      return { 
+        ok: false, 
+        error: `No asset found for "${variant}" in release ${version}.\n\nExpected: ${expectedFilename}\n\nAvailable for your platform:\n  ${platformAssets.join('\n  ') || 'None found'}\n\nTry selecting a different variant or download manually from GitHub.`,
+        allAssets,
+        releaseUrl: releaseData.html_url
+      };
+    }
+
+    return { 
+      ok: true, 
+      url: asset.browser_download_url, 
+      filename: asset.name, 
+      version, 
+      sizeMB: Math.round(asset.size / 1e6),
+      releaseUrl: releaseData.html_url
+    };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -794,43 +888,69 @@ ipcMain.handle('install-llama-server', async (event, downloadUrl) => {
     const zip = new AdmZip(tmpZip);
     const entries = zip.getEntries();
 
-    // Extract ALL files from the zip into INSTALL_DIR
-    // llama.cpp zips contain: llama-server + multiple .dll/.so/.dylib files
-    // All must be in the same directory for the OS to find them
-    const REQUIRED_EXTENSIONS = ['.exe', '.dll', '.so', '.dylib', ''];
-    let extractedCount = 0;
-    let foundLlamaServer = false;
     const binaryName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
-
+    
+    // === PASS 1: Find the binary and its directory ===
+    let binaryEntry = null;
+    let binaryDir = '';
+    
     for (const entry of entries) {
       if (entry.isDirectory) continue;
-
+      const fileName = path.basename(entry.entryName);
+      if (fileName.toLowerCase() === binaryName.toLowerCase()) {
+        binaryEntry = entry;
+        // Extract parent directory path in the archive
+        const entryParts = entry.entryName.split('/');
+        binaryDir = entryParts.length > 1 ? entryParts.slice(0, -1).join('/') + '/' : '';
+        console.log(`[install] Found binary at: ${entry.entryName} (dir: "${binaryDir}")`);
+        break;
+      }
+    }
+    
+    if (!binaryEntry) {
+      // List all files for debugging
+      const allFiles = entries
+        .filter(e => !e.isDirectory)
+        .map(e => e.entryName)
+        .join('\n  ');
+      return {
+        ok: false,
+        error: `llama-server binary not found in the downloaded archive.\n\nArchive contents:\n  ${allFiles}\n\nThis may be the wrong variant for your platform. Try a different variant in Step 0.`
+      };
+    }
+    
+    // === PASS 2: Extract all files from the same directory as the binary ===
+    const ALLOWED_EXTENSIONS = new Set(['.exe', '.dll', '.so', '.dylib', '.metal', '']);
+    let extractedCount = 0;
+    const extractedFiles = [];
+    
+    for (const entry of entries) {
+      if (entry.isDirectory) continue;
+      
       const entryName = entry.entryName;
       const fileName = path.basename(entryName);
       const ext = path.extname(fileName).toLowerCase();
-
-      // Skip files nested more than 2 levels deep
-      const parts = entryName.split('/').filter(p => p.length > 0);
-      if (parts.length > 2) continue;
-
+      
+      // Only extract files from the same directory as the binary
+      // Or from the root if binary is at root
+      const isInBinaryDir = binaryDir === '' 
+        ? !entryName.includes('/') 
+        : entryName.startsWith(binaryDir);
+      
+      if (!isInBinaryDir) continue;
+      
       // Only extract executables and shared libraries
-      if (!REQUIRED_EXTENSIONS.includes(ext) && ext !== '') continue;
-
-      // Skip empty or suspiciously small files
-      if (entry.header.size < 100) continue;
-
+      if (!ALLOWED_EXTENSIONS.has(ext)) continue;
+      
       try {
         zip.extractEntryTo(entry, INSTALL_DIR, false, true);
         extractedCount++;
-
-        if (fileName.toLowerCase() === binaryName.toLowerCase()) {
-          foundLlamaServer = true;
-        }
-
+        extractedFiles.push(fileName);
+        
         if (mainWindow) {
           mainWindow.webContents.send('install-progress', {
             stage: 'extracting',
-            percent: Math.round((extractedCount / entries.length) * 100),
+            percent: Math.round(50 + (extractedCount / entries.length) * 40),
             currentFile: fileName
           });
         }
@@ -838,13 +958,8 @@ ipcMain.handle('install-llama-server', async (event, downloadUrl) => {
         console.warn(`[install] Failed to extract ${fileName}:`, e.message);
       }
     }
-
-    if (!foundLlamaServer) {
-      return {
-        ok: false,
-        error: `llama-server binary not found in the downloaded archive. Extracted ${extractedCount} files. This may be the wrong variant for your platform. Try a different variant in Step 0.`
-      };
-    }
+    
+    console.log(`[install] Extracted ${extractedCount} files to ${INSTALL_DIR}:`, extractedFiles.join(', '));
 
     // Make executable on macOS/Linux
     if (process.platform !== 'win32') {
@@ -854,9 +969,15 @@ ipcMain.handle('install-llama-server', async (event, downloadUrl) => {
       }
     }
 
-    console.log(`[install] Extracted ${extractedCount} files to ${INSTALL_DIR}`);
-
     const destPath = path.join(INSTALL_DIR, binaryName);
+    
+    // Verify the binary was actually extracted
+    if (!fs.existsSync(destPath)) {
+      return {
+        ok: false,
+        error: `Installation failed: llama-server was found in archive but not extracted to ${destPath}. Extracted files: ${extractedFiles.join(', ')}`
+      };
+    }
 
     // PATH update on Windows
     if (process.platform === 'win32') {

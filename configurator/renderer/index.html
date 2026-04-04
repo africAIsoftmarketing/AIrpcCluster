@@ -1266,21 +1266,40 @@
         const result = await window.rpcCluster.getLlamaDownloadUrl(hwState.variant);
         if (result.ok) {
           hwState.downloadUrl = result.url;
+          hwState.releaseUrl = result.releaseUrl;
           document.getElementById('hw-dl-version').textContent = 'llama.cpp ' + result.version;
           document.getElementById('hw-dl-file').textContent = 'File: ' + result.filename;
           document.getElementById('hw-dl-size').textContent = 'Size: ' + result.sizeMB + ' MB';
           document.getElementById('download-manual-link').dataset.url = result.url;
           showHwState('hw-download');
         } else {
-          btn.textContent = 'Error: ' + result.error;
+          // Show detailed error with available assets
+          showAssetError(result.error, result.releaseUrl, result.allAssets);
           btn.disabled = false;
-          setTimeout(() => { btn.textContent = 'Get download link'; }, 5000);
+          btn.textContent = 'Get download link';
         }
       } catch (err) {
         btn.textContent = 'Error: ' + err.message;
         btn.disabled = false;
         setTimeout(() => { btn.textContent = 'Get download link'; }, 5000);
       }
+    }
+
+    function showAssetError(errorMessage, releaseUrl, allAssets) {
+      const errorEl = document.getElementById('hw-failed');
+      const msgEl = document.getElementById('hw-error-msg');
+      
+      // Format error message with line breaks
+      let formattedMsg = escapeHtml(errorMessage).replace(/\n/g, '<br>');
+      
+      // Add link to GitHub release if available
+      if (releaseUrl) {
+        formattedMsg += '<br><br><a href="#" onclick="window.rpcCluster.openExternalUrl(\'' + 
+          releaseUrl + '\'); return false;" style="color: #7c6df0;">Open GitHub Release page →</a>';
+      }
+      
+      msgEl.innerHTML = formattedMsg;
+      showHwState('hw-failed');
     }
 
     async function installAutomatically() {
