@@ -5,6 +5,19 @@ Electron application for configuring and managing distributed llama.cpp inferenc
 
 ## What's Been Implemented
 
+### 2025-01-XX - Server Logs & Force Start Feature
+- **Server Logs Panel**: Added real-time log viewer in Step 5 for each model server
+  - Streams stdout/stderr from llama-server process
+  - Refresh button for manual log refresh
+  - Expand/Collapse button for larger view
+  - Clear button to reset logs
+  - Auto-scroll to latest entries
+- **Force Start**: Added "Force Start" button to bypass normal health checks
+  - Kills existing processes on the port (SIGKILL)
+  - Extended timeout (60s instead of 30s)
+  - Shows progress in logs
+  - Useful for 503 errors with distributed inference servers
+
 ### 2025-01-XX - Cloud Worker Discovery
 - Added `probeCloudWorker` and `scanCloudWorkers` IPC channels in preload.js
 - Added Cloud Instance panel in renderer/index.html for Vast.ai/RunPod/Lambda Labs
@@ -30,11 +43,13 @@ Electron application for configuring and managing distributed llama.cpp inferenc
 - Probe cloud workers via TCP (port 50052)
 - Configure and start llama-server instances
 - Auto-install llama-server from GitHub releases
+- **View server logs during startup and requests**
+- **Force start servers bypassing health checks**
 
 ## Files Modified
-- `configurator/main.js` - IPC handlers, asset mapping, ZIP extraction
-- `configurator/preload.js` - Cloud worker IPC channels
-- `configurator/renderer/index.html` - Cloud panel, error display
+- `configurator/main.js` - IPC handlers, asset mapping, ZIP extraction, server logs, force-start
+- `configurator/preload.js` - Cloud worker IPC channels, server logs, force-start
+- `configurator/renderer/index.html` - Cloud panel, error display, logs panel, force-start UI
 - `/app/INSTALL-VASTAI.md` - Installation guide (new)
 
 ## Backlog

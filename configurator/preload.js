@@ -24,4 +24,10 @@ contextBridge.exposeInMainWorld('rpcCluster', {
   stopModel: (id) => ipcRenderer.invoke('stop-model', id),
   stopAllModels: () => ipcRenderer.invoke('stop-all-models'),
   getModelStatus: (id) => ipcRenderer.invoke('get-model-status', id),
+  // Server logs management
+  getServerLogs: (modelId) => ipcRenderer.invoke('get-server-logs', modelId),
+  clearServerLogs: (modelId) => ipcRenderer.invoke('clear-server-logs', modelId),
+  onServerLog: (cb) => ipcRenderer.on('server-log', (event, data) => cb(data)),
+  // Force start (bypasses health checks)
+  forceStartModel: (id) => ipcRenderer.invoke('force-start-model', id),
 });

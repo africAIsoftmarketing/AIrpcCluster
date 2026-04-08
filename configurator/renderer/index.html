@@ -683,6 +683,100 @@
       border-color: #EF9F27;
       background: #1a1500;
     }
+
+    /* Server Logs Panel */
+    .logs-panel {
+      background: #0d0d0d;
+      border: 1px solid #333;
+      border-radius: 6px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+
+    .logs-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+    }
+
+    .logs-header-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #aaa;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .logs-header-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .logs-header-actions button {
+      background: transparent;
+      border: 1px solid #444;
+      color: #888;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .logs-header-actions button:hover {
+      border-color: #7c6df0;
+      color: #7c6df0;
+    }
+
+    .logs-content {
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      padding: 8px;
+    }
+
+    .logs-content.expanded {
+      max-height: 400px;
+    }
+
+    .log-entry {
+      padding: 2px 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .log-entry .timestamp {
+      color: #666;
+      margin-right: 8px;
+    }
+
+    .log-entry.stdout { color: #ccc; }
+    .log-entry.stderr { color: #f0ad4e; }
+    .log-entry.error { color: #f44336; }
+    .log-entry.info { color: #3b82f6; }
+    .log-entry.warn { color: #EF9F27; }
+
+    .logs-empty {
+      color: #666;
+      font-style: italic;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .btn-force {
+      background: #EF9F27;
+      color: #000;
+      font-weight: 500;
+    }
+
+    .btn-force:hover:not(:disabled) {
+      background: #ffb938;
+    }
   </style>
 </head>
 <body>
@@ -1540,14 +1634,37 @@
             '<button class="sc-copy-curl btn btn-secondary" data-cmd="' + escapeAttr(curlCmd) + '" style="margin-top: 6px; font-size: 11px; padding: 6px 12px;">Copy curl</button>';
         } else if (status === 'error') {
           body = '<div style="color: #f44336; font-size: 13px; margin-top: 8px;">' + escapeHtml(error) + '</div>' +
-            '<button class="sc-retry-btn btn btn-secondary" data-id="' + model.id + '" style="margin-top: 8px; font-size: 12px; padding: 6px 14px;">Retry</button>';
+            '<button class="sc-retry-btn btn btn-secondary" data-id="' + model.id + '" style="margin-top: 8px; font-size: 12px; padding: 6px 14px;">Retry</button>' +
+            '<button class="sc-force-start-btn btn btn-force" data-id="' + model.id + '" style="margin-top: 8px; margin-left: 8px; font-size: 12px; padding: 6px 14px;">Force Start</button>';
         } else {
           body = '<div style="font-size: 12px; color: #666; margin-top: 8px;">Port ' + model.port + ' &middot; Ready to start</div>';
         }
 
+        // Logs panel - always visible
+        var logsPanel = '<div class="logs-panel">' +
+          '<div class="logs-header">' +
+            '<div class="logs-header-title">' +
+              '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>' +
+              'Server Logs' +
+            '</div>' +
+            '<div class="logs-header-actions">' +
+              '<button class="sc-logs-refresh" data-id="' + model.id + '" title="Refresh logs">Refresh</button>' +
+              '<button class="sc-logs-expand" data-id="' + model.id + '" title="Expand/Collapse">Expand</button>' +
+              '<button class="sc-logs-clear" data-id="' + model.id + '" title="Clear logs">Clear</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="logs-content" id="logs-content-' + model.id + '">' +
+            '<div class="logs-empty">No logs yet. Start the server to see logs.</div>' +
+          '</div>' +
+        '</div>';
+
         var btnLabel = status === 'running' ? 'Stop server' : status === 'starting' ? 'Starting...' : 'Start server';
         var btnClass = status === 'running' ? 'btn-danger' : 'btn-primary';
         var btnDisabled = status === 'starting' ? ' disabled' : '';
+
+        // Add force start button for stopped state
+        var forceStartBtn = (status === 'stopped' || status === 'error') ? 
+          '<button class="sc-force-start-btn btn btn-force" data-id="' + model.id + '" style="width: 100%; margin-top: 8px; font-size: 13px; padding: 10px;" title="Force start: kills existing processes on port and starts with extended timeout">Force Start</button>' : '';
 
         return '<div class="server-card ' + cardClass + '">' +
           '<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">' +
@@ -1557,6 +1674,8 @@
           '</div>' +
           body +
           '<button class="sc-toggle-btn btn ' + btnClass + '" data-id="' + model.id + '"' + btnDisabled + ' style="width: 100%; margin-top: 12px; font-size: 13px; padding: 10px;">' + btnLabel + '</button>' +
+          forceStartBtn +
+          logsPanel +
         '</div>';
       }).join('');
 
@@ -1578,6 +1697,93 @@
       container.querySelectorAll('.sc-retry-btn').forEach(btn => {
         btn.addEventListener('click', () => handleStartModel(btn.dataset.id));
       });
+      // Force start buttons
+      container.querySelectorAll('.sc-force-start-btn').forEach(btn => {
+        btn.addEventListener('click', () => handleForceStartModel(btn.dataset.id));
+      });
+      // Logs: refresh
+      container.querySelectorAll('.sc-logs-refresh').forEach(btn => {
+        btn.addEventListener('click', () => refreshLogsForModel(btn.dataset.id));
+      });
+      // Logs: expand/collapse
+      container.querySelectorAll('.sc-logs-expand').forEach(btn => {
+        btn.addEventListener('click', () => {
+          var logsContent = document.getElementById('logs-content-' + btn.dataset.id);
+          if (logsContent) {
+            logsContent.classList.toggle('expanded');
+            btn.textContent = logsContent.classList.contains('expanded') ? 'Collapse' : 'Expand';
+          }
+        });
+      });
+      // Logs: clear
+      container.querySelectorAll('.sc-logs-clear').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await window.rpcCluster.clearServerLogs(btn.dataset.id);
+          var logsContent = document.getElementById('logs-content-' + btn.dataset.id);
+          if (logsContent) {
+            logsContent.innerHTML = '<div class="logs-empty">Logs cleared.</div>';
+          }
+        });
+      });
+
+      // Load initial logs for all models
+      state.models.forEach(model => {
+        refreshLogsForModel(model.id);
+      });
+    }
+
+    // Refresh logs for a specific model
+    async function refreshLogsForModel(modelId) {
+      var logs = await window.rpcCluster.getServerLogs(modelId);
+      var logsContent = document.getElementById('logs-content-' + modelId);
+      if (!logsContent) return;
+
+      if (!logs || logs.length === 0) {
+        logsContent.innerHTML = '<div class="logs-empty">No logs yet. Start the server to see logs.</div>';
+        return;
+      }
+
+      logsContent.innerHTML = logs.map(entry => {
+        return '<div class="log-entry ' + entry.type + '">' +
+          '<span class="timestamp">[' + entry.timestamp + ']</span>' +
+          escapeHtml(entry.message) +
+        '</div>';
+      }).join('');
+
+      // Auto-scroll to bottom
+      logsContent.scrollTop = logsContent.scrollHeight;
+    }
+
+    // Handle force start
+    async function handleForceStartModel(id) {
+      var model = state.models.find(m => m.id === id);
+      if (!model) return;
+
+      state.serverStatuses[id] = 'starting';
+      state.serverErrors[id] = '';
+      renderServerCards();
+      renderModelCards();
+
+      try {
+        var result = await window.rpcCluster.forceStartModel(id);
+        if (result.ok) {
+          state.serverStatuses[id] = 'running';
+          state.serverUrls[id] = result.url;
+        } else {
+          if (result.stillRunning) {
+            state.serverStatuses[id] = 'starting';
+          } else {
+            state.serverStatuses[id] = 'error';
+          }
+          state.serverErrors[id] = result.error;
+        }
+      } catch (err) {
+        state.serverStatuses[id] = 'error';
+        state.serverErrors[id] = err.message;
+      }
+
+      renderServerCards();
+      renderModelCards();
     }
 
     // --- Model form (add/edit) ---
@@ -2241,6 +2447,28 @@
       // Step 5: Global controls
       document.getElementById('start-all-btn').addEventListener('click', startAllModels);
       document.getElementById('stop-all-btn').addEventListener('click', stopAllModels);
+
+      // Real-time log streaming
+      window.rpcCluster.onServerLog((data) => {
+        var logsContent = document.getElementById('logs-content-' + data.modelId);
+        if (!logsContent) return;
+
+        // Check if empty placeholder exists
+        var emptyPlaceholder = logsContent.querySelector('.logs-empty');
+        if (emptyPlaceholder) {
+          logsContent.innerHTML = '';
+        }
+
+        // Add new log entry
+        var entry = data.entry;
+        var logDiv = document.createElement('div');
+        logDiv.className = 'log-entry ' + entry.type;
+        logDiv.innerHTML = '<span class="timestamp">[' + entry.timestamp + ']</span>' + escapeHtml(entry.message);
+        logsContent.appendChild(logDiv);
+
+        // Auto-scroll to bottom
+        logsContent.scrollTop = logsContent.scrollHeight;
+      });
     }
 
     // Start

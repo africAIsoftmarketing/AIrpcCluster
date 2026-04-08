@@ -8,6 +8,8 @@ const { discoverWorkers, probeCloudWorker, scanCloudWorkers, CONFIG_PATH } = req
 
 let mainWindow = null;
 const inferenceProcesses = new Map();
+const serverLogs = new Map(); // Store logs per model
+const MAX_LOG_LINES = 500; // Maximum lines to keep per model
 let appModels = [];
 let appWorkers = [];
 
@@ -504,7 +506,7 @@ ipcMain.handle('start-model', async (event, id) => {
 
   let proc;
   try {
-    proc = spawn(llamaBinary, args, { stdio: 'ignore', detached: false });
+    proc = spawn(llamaBinary, args, { stdio: ['ignore', 'pipe', 'pipe'], detached: false });
   } catch (err) {
     if (err.code === 'ENOENT') {
       return { ok: false, error: 'llama-server not found in PATH.' };
@@ -512,12 +514,55 @@ ipcMain.handle('start-model', async (event, id) => {
     return { ok: false, error: err.message };
   }
 
+  // Initialize log storage for this model
+  serverLogs.set(id, []);
+
+  // Helper to add log entry
+  const addLog = (type, message) => {
+    const logs = serverLogs.get(id) || [];
+    const timestamp = new Date().toISOString().substr(11, 8);
+    const entry = { timestamp, type, message };
+    logs.push(entry);
+    // Keep only last MAX_LOG_LINES
+    if (logs.length > MAX_LOG_LINES) {
+      logs.shift();
+    }
+    serverLogs.set(id, logs);
+    // Send to renderer
+    if (mainWindow) {
+      mainWindow.webContents.send('server-log', { modelId: id, entry });
+    }
+  };
+
+  // Capture stdout
+  if (proc.stdout) {
+    proc.stdout.on('data', (data) => {
+      const lines = data.toString().split('\n').filter(l => l.trim());
+      lines.forEach(line => addLog('stdout', line));
+    });
+  }
+
+  // Capture stderr
+  if (proc.stderr) {
+    proc.stderr.on('data', (data) => {
+      const lines = data.toString().split('\n').filter(l => l.trim());
+      lines.forEach(line => addLog('stderr', line));
+    });
+  }
+
+  addLog('info', `Starting llama-server on port ${model.port}...`);
+  addLog('info', `Command: ${llamaBinary} ${args.join(' ')}`);
+
   let spawnError = null;
-  proc.on('error', (err) => { spawnError = err; });
-  proc.on('exit', () => {
+  proc.on('error', (err) => { 
+    spawnError = err;
+    addLog('error', `Process error: ${err.message}`);
+  });
+  proc.on('exit', (code, signal) => {
     inferenceProcesses.delete(id);
     const m = appModels.find(x => x.id === id);
     if (m) m.status = 'stopped';
+    addLog('info', `Process exited with code ${code}${signal ? ` (signal: ${signal})` : ''}`);
   });
 
   inferenceProcesses.set(id, proc);
@@ -1097,4 +1142,165 @@ ipcMain.handle('check-llama-installation', async () => {
   }
 
   return result;
+});
+
+// --- Server logs management ---
+
+ipcMain.handle('get-server-logs', async (event, modelId) => {
+  return serverLogs.get(modelId) || [];
+});
+
+ipcMain.handle('clear-server-logs', async (event, modelId) => {
+  serverLogs.set(modelId, []);
+  return { ok: true };
+});
+
+// --- Force start model (bypasses health checks, kills existing process) ---
+
+ipcMain.handle('force-start-model', async (event, id) => {
+  const model = appModels.find(m => m.id === id);
+  if (!model) return { ok: false, error: 'Model not found' };
+
+  // Initialize or clear logs
+  serverLogs.set(id, []);
+  const addLog = (type, message) => {
+    const logs = serverLogs.get(id) || [];
+    const timestamp = new Date().toISOString().substr(11, 8);
+    const entry = { timestamp, type, message };
+    logs.push(entry);
+    if (logs.length > MAX_LOG_LINES) logs.shift();
+    serverLogs.set(id, logs);
+    if (mainWindow) {
+      mainWindow.webContents.send('server-log', { modelId: id, entry });
+    }
+  };
+
+  addLog('info', '=== FORCE START initiated ===');
+
+  // Force kill any existing process
+  if (inferenceProcesses.has(id)) {
+    addLog('info', 'Killing existing process...');
+    try { 
+      const proc = inferenceProcesses.get(id);
+      proc.kill('SIGKILL'); // Force kill instead of SIGTERM
+    } catch (e) {
+      addLog('warn', `Kill failed: ${e.message}`);
+    }
+    inferenceProcesses.delete(id);
+    // Wait a bit for port to be released
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  // Also try to kill any process on the port (Unix only)
+  if (process.platform !== 'win32') {
+    try {
+      addLog('info', `Checking for processes on port ${model.port}...`);
+      const lsofResult = execSync(`lsof -ti:${model.port} 2>/dev/null || true`, { encoding: 'utf-8' }).trim();
+      if (lsofResult) {
+        addLog('info', `Found PID(s) on port: ${lsofResult}`);
+        execSync(`kill -9 ${lsofResult.split('\n').join(' ')} 2>/dev/null || true`);
+        addLog('info', 'Killed existing processes on port');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (e) {
+      addLog('warn', `Port cleanup failed: ${e.message}`);
+    }
+  }
+
+  if (!model.modelPath || typeof model.modelPath !== 'string' || model.modelPath.trim() === '') {
+    addLog('error', 'Model path is not set');
+    return { ok: false, error: 'Model path is not set. Edit the model configuration first.' };
+  }
+  if (!fs.existsSync(model.modelPath)) {
+    addLog('error', `Model file not found: ${model.modelPath}`);
+    return { ok: false, error: `Model file not found: ${model.modelPath}` };
+  }
+
+  // Resolve llama-server binary
+  let llamaBinary = 'llama-server';
+  try {
+    const cmd = process.platform === 'win32' ? 'where llama-server' : 'which llama-server';
+    execSync(cmd, { encoding: 'utf-8' });
+  } catch (e) {
+    const INSTALL_DIR = process.platform === 'win32'
+      ? path.join('C:\\', 'llama-server')
+      : '/usr/local/bin';
+    const binaryName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
+    const knownPath = path.join(INSTALL_DIR, binaryName);
+
+    if (fs.existsSync(knownPath)) {
+      llamaBinary = knownPath;
+    } else {
+      addLog('error', 'llama-server not found');
+      return { ok: false, error: 'llama-server not found. Complete the host setup in Step 0.' };
+    }
+  }
+
+  const args = [
+    '-m', model.modelPath,
+    '--port', String(model.port),
+    '-ngl', String(model.nGpuLayers || 99),
+  ];
+
+  const enabledWorkers = appWorkers.filter(w => w.enabled);
+  if (enabledWorkers.length > 0) {
+    args.push('--rpc', enabledWorkers.map(w => `${w.ip}:${w.port}`).join(','));
+  }
+
+  addLog('info', `Command: ${llamaBinary} ${args.join(' ')}`);
+
+  let proc;
+  try {
+    proc = spawn(llamaBinary, args, { stdio: ['ignore', 'pipe', 'pipe'], detached: false });
+  } catch (err) {
+    addLog('error', `Spawn failed: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+
+  // Capture output
+  if (proc.stdout) {
+    proc.stdout.on('data', (data) => {
+      data.toString().split('\n').filter(l => l.trim()).forEach(line => addLog('stdout', line));
+    });
+  }
+  if (proc.stderr) {
+    proc.stderr.on('data', (data) => {
+      data.toString().split('\n').filter(l => l.trim()).forEach(line => addLog('stderr', line));
+    });
+  }
+
+  proc.on('error', (err) => addLog('error', `Process error: ${err.message}`));
+  proc.on('exit', (code, signal) => {
+    inferenceProcesses.delete(id);
+    const m = appModels.find(x => x.id === id);
+    if (m) m.status = 'stopped';
+    addLog('info', `Process exited with code ${code}${signal ? ` (signal: ${signal})` : ''}`);
+  });
+
+  inferenceProcesses.set(id, proc);
+
+  // Wait for port with extended timeout for force start
+  addLog('info', `Waiting for port ${model.port} (timeout: 60s)...`);
+  try {
+    await waitForPort(model.port, 60000); // Extended timeout for force start
+  } catch (err) {
+    addLog('error', `Port wait failed: ${err.message}`);
+    // Don't kill the process - let it keep trying
+    addLog('warn', 'Server may still be starting. Check logs for progress.');
+    model.status = 'starting';
+    return {
+      ok: false,
+      error: `Server did not respond within 60 seconds. Check logs for details. The process is still running.`,
+      stillRunning: true
+    };
+  }
+
+  addLog('info', `Server is now listening on port ${model.port}`);
+  model.status = 'running';
+  return {
+    ok: true,
+    url: `http://localhost:${model.port}/v1`,
+    model: model.name,
+    port: model.port
+  };
 });
